@@ -44,12 +44,12 @@ def get_user_endpoint(user_email: str, db: Session = Depends(get_db)):
 
 ################### EVENTS ###########################
 
-@router.post("/events/{user_id}", response_model=EventResponse)
+@router.post("/events/user/{user_id}", response_model=EventResponse)
 def create_event_endpoint(user_id: int ,event: EventCreate, db: Session = Depends(get_db)):
     return create_event(db, description=event.description, start_time=event.start_time, end_time=event.end_time, state=event.state, user_id=user_id)
 
 
-@router.get("/events/{user_id}", response_model=List[EventResponse])
+@router.get("/events/user/{user_id}", response_model=List[EventResponse])
 def get_events_endpoint(user_id: int, db: Session = Depends(get_db)):
     return get_events(db, user_id)
 
@@ -63,6 +63,6 @@ def delete_event_endpoint(event_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/events/{event_id}", response_model=EventResponse)
-def update_event_endpoint(event: EventResponse, db: Session = Depends(get_db)):
-    return update_event(db, event_id=event.id, new_description= event.description, new_start_time=event.start_time, new_end_time = event.end_time, new_state= event.state)
+def update_event_endpoint(event_id:int, event: EventCreate, db: Session = Depends(get_db)):
+    return update_event(db, event_id=event_id, new_description= event.description, new_start_time=event.start_time, new_end_time = event.end_time, new_state= event.state)
 
