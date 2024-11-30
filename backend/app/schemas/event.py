@@ -9,7 +9,7 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     state : str
 
-class EventResponse(EventBase):
+class EventResponse(EventCreate):
     id: int
     
 

@@ -1,2 +1,5 @@
 timedelta
 alembic
+uvicorn
+sqlalchemy
+pydantic-settings 

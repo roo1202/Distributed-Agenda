@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models.meetings import Meeting
+from app.models.meeting import Meeting
 from app.schemas.meeting import MeetingCreate
 from app.models.user import User
 from .user_service import get_user_by_id
@@ -9,10 +9,10 @@ from .user_service import get_user_by_id
 # Crear una nueva reunion
 def create_meeting(db: Session, users_email: list[str], state: str, event_id: int, user_id: int):
     meetings : list[Meeting] = []
-    for user in users_email:
-        user = db.query(User).filter(User.email == user).first()
+    for email in users_email:
+        user = db.query(User).filter(User.email == email).first()
         if user is None:
-            raise HTTPException(status_code=404, detail=f"User '{user}' not found")
+            raise HTTPException(status_code=404, detail=f"User '{email}' not found")
         else:
             new_meeting = Meeting(
                 user_id = user.id,
@@ -63,9 +63,6 @@ def get_meeting_by_id(db: Session, meeting_id: int):
     else:
         state = 'pending'
     
-    meeting.state = state
-    db.commit()
-    db.refresh(meeting)
     return (state, result, meeting.event_id)
 
 

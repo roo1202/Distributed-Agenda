@@ -6,8 +6,9 @@ from alembic import context
 # Importa tu Base y tus modelos
 from app.db.base import Base  # Asegúrate de que la ruta sea correcta
 from app.models.user import User  # Importa tus modelos
+from app.models.group import Group  # Importa tus modelos
+from app.models.meeting import Meeting  # Importa tus modelos
 from app.models.event import Event  # Importa tus modelos
-from app.models.meetings import Meeting # Importa tus modelos
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
