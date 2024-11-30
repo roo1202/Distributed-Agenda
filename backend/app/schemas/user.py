@@ -10,5 +10,8 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: int
 
+class UserInDB(UserBase):
+    hashed_password: str
+    
     class Config:
         orm_mode = True
