@@ -11,6 +11,14 @@ def create_user(db: Session, name: str, email: str, password: str):
     db.refresh(new_user)
     return new_user
 
+# Obtener un usuario por su email
+def get_user_by_email(db: Session, user_email: str):
+    return db.query(User).filter(User.email == user_email).first()
+
+# Obtener un usuario por su id
+def get_user_by_id(db: Session, user_id: int):
+    return db.query(User).filter(User.id == user_id).first()
+
 # Obtener todos los usuarios
 def get_users(db: Session): 
     return db.query(User).all()
