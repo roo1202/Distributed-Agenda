@@ -62,8 +62,8 @@ const handleLogin = async () => {
     const authToken = useCookie('auth_token');
     authToken.value = response.token;
 
-    // Redirigir al dashboard
-    await router.push('/');
+    // Redirigir a la nueva página con el token como parámetro de consulta
+    await router.push({ path: '/new-page', query: { token: response.token } });
   } catch (err) {
     // Manejar errores
     error.value = err?.data?.message || 'Error al iniciar sesión';
