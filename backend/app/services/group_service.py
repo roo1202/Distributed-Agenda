@@ -103,3 +103,23 @@ def delete_group(db: Session, group_id: int):
         db.delete(group)
         db.commit()
     return group
+
+# Servicio para saber si un grupo es jerarquico
+def is_hierarchy_group(db: Session, group_id: int):
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if group:
+        return group.hierarchy
+    raise HTTPException(status_code=403, detail="Group not found")
+
+# Servicio para obtener el nivel de jerarquía de un usuario en un grupo
+def get_hierarchy_level(db: Session, user_id: int, group_id: int) -> int:
+    result = db.execute(
+        select([association_table.c.hierarchy_level])
+        .where(association_table.c.user_id == user_id)
+        .where(association_table.c.group_id == group_id)
+    ).fetchone()
+
+    if result:
+        return result[0]
+    else:
+        raise HTTPException(status_code=404, detail="Hierarchy level not found")
