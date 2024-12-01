@@ -1,7 +1,9 @@
 from datetime import datetime
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.models.event import Event
 from app.schemas.event import EventCreate
+from app.models.meeting import Meeting
 
 # Crear un nuevo evento
 def create_event(db: Session, description: str, start_time: datetime, end_time: datetime, state: str, user_id: int):
@@ -41,6 +43,12 @@ def update_event(db: Session, event_id: int, new_description: str, new_start_tim
 def delete_event(db: Session, event_id: int, user_id: int):
     event = db.query(Event).filter(Event.id == event_id).first()
     if event and event.user_id == user_id:
+        # Eliminar todas las reuniones asociadas al evento
+        db.query(Meeting).filter(Meeting.event_id == event_id).delete()
+        
+        # Eliminar el evento
         db.delete(event)
         db.commit()
+    else:
+        raise HTTPException(status_code=404, detail="Event not found or not authorized")
     return event
