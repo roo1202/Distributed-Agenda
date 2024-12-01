@@ -2,7 +2,7 @@
     <div class="notifications-panel" :class="{ visible: isVisible, hidden: !isVisible }">
         <div class="header">
             <h2>Notificaciones</h2>
-            <button class="close-button" @click="$emit('close')">X</button>
+            <button class="close-button" @click="$emit('close')">❌</button>
         </div>
         <ul>
             <li v-for="notification in notifications" :key="notification.id">

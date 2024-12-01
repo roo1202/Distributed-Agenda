@@ -16,6 +16,7 @@
                         <div>
                             <button class="edit-button" @click.stop="editEvent(evento)">✏️</button>
                             <button class="delete-button" @click.stop="deleteEvent(evento.id)">🗑️</button>
+                            <button class="add-user-button" @click.stop="openEmailInput(evento.id)">👤+</button>
                         </div>
                     </div>
 
@@ -24,6 +25,27 @@
                         <p>Fin: {{ evento.end_time }}</p>
                         <p>Estado: {{ evento.state }}</p>
                     </div>
+
+                    <div v-if="selectedEventId === evento.id && showEmailInput" class="email-input-container"
+                        @click.stop>
+                        <div class="email-header">
+                            <h3>Agregar correos para el evento</h3>
+                            <button class="close-email-button" @click.stop="closeEmailInput">❌</button>
+                        </div>
+                        <div class="email-input">
+                            <input type="email" v-model="newEmail" placeholder="Escribe un correo y presiona Enter"
+                                @keyup.enter.stop="addEmail" />
+                            <ul>
+                                <li v-for="(email, index) in emailList" :key="index" class="li-sep">
+                                    {{ email }} <button @click.stop="removeEmail(index)" class="close-email-button"
+                                        style="font-size: 10px;">❌</button>
+                                </li>
+                            </ul>
+                            <button @click.stop="sendNotifications(evento.id)" class="send-button">Enviar
+                                notificaciones</button>
+                        </div>
+                    </div>
+
                 </div>
             </div>
             <div class="create-event-container">
@@ -31,7 +53,7 @@
                 <div v-if="showCreateEvent" class="create-event">
                     <div class="container-p">
                         <h2>Crear Evento</h2>
-                        <button class="close-button" @click="closeForm">X</button>
+                        <button class="close-button" @click="closeForm">❌</button>
                     </div>
 
                     <form @submit.prevent="createEvent">
@@ -58,7 +80,7 @@
                     </form>
                 </div>
                 <div v-if="showEditEvent" class="edit-event">
-                    <h2 class="container-p">Editar Evento <button class="close-button" @click="closeForm">X</button>
+                    <h2 class="container-p">Editar Evento <button class="close-button" @click="closeForm">❌</button>
                     </h2>
 
                     <form @submit.prevent="updateEvent">
@@ -95,7 +117,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
-import { EVENTS_USER, EVENTS } from '~/public/config';
+import { EVENTS_USER, EVENTS, MEETINGS } from '~/public/config';
 
 const route = useRoute();
 const token = ref('');
@@ -194,6 +216,66 @@ const deleteEvent = async (id) => {
 const showNotificationsPanel = ref(false);
 const toggleNotificationsPanel = () => {
     showNotificationsPanel.value = !showNotificationsPanel.value;
+};
+
+const selectedEventId = ref(null);
+const showEmailInput = ref(false);
+const emailList = ref([]);
+const newEmail = ref("");
+
+// Abre la caja para ingresar correos
+const openEmailInput = (eventId) => {
+    selectedEventId.value = eventId;
+    showEmailInput.value = true;
+};
+
+// Añade un correo a la lista
+const addEmail = () => {
+    if (newEmail.value && !emailList.value.includes(newEmail.value)) {
+        emailList.value.push(newEmail.value);
+        newEmail.value = ""; // Limpia el campo de entrada
+    }
+};
+
+// Elimina un correo de la lista
+const removeEmail = (index) => {
+    emailList.value.splice(index, 1);
+};
+
+// Envía notificaciones a los correos ingresados
+const sendNotifications = async (eventId) => {
+    if (emailList.value.length === 0) {
+        alert("Por favor, agrega al menos un correo.");
+        return;
+    }
+
+    try {
+        await axios.post(MEETINGS, {
+            event_id: eventId,
+            users_email: emailList.value,
+            state: 'pendiente'
+        },
+            {
+                headers: {
+                    'Authorization': `Bearer ${token.value}`
+                }
+            }
+        );
+        alert("Notificaciones enviadas exitosamente.");
+        // Limpia el estado
+        emailList.value = [];
+        selectedEventId.value = null;
+        showEmailInput.value = false;
+    } catch (error) {
+        console.error(error);
+        alert("Hubo un error al enviar las notificaciones.");
+    }
+};
+
+// Cierra la caja de correos
+const closeEmailInput = () => {
+    selectedEventId.value = null;
+    showEmailInput.value = false;
 };
 
 onMounted(async () => {
@@ -342,6 +424,74 @@ select {
     width: 100%;
     height: 100%;
     /* Altura total de la ventana */
+}
+
+.add-user-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+.li-sep {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.email-input-container {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.email-input {
+    display: flex;
+    flex-direction: column;
+}
+
+.email-input input {
+    margin-bottom: 10px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.email-input ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.email-input ul li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.send-button {
+    padding: 8px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.email-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.close-email-button {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: red;
 }
 </style>
 
