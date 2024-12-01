@@ -112,9 +112,9 @@ def create_meeting_endpoint(meeting: MeetingCreate, db: Session = Depends(get_db
     return create_meeting(db, users_email= meeting.users_email, state= meeting.state, event_id= meeting.event_id, user_id=user.id)
 
 # Obtener todas las reuniones de un usuario
-@router.get("/meetings/user/", response_model=List[MeetingCreate])
+@router.get("/meetings/user/", response_model=List[MeetingInfo])
 def get_meetings_endpoint(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return get_meetings(db, user.id)
+    return [MeetingInfo(state=meeting["state"], user_email=meeting["event"]["user_email"], event_description=meeting["event"]["description"], start_time=meeting["event"]["start_time"],end_time = meeting["event"]["end_time"], id=meeting["meeting_id"], event_id= meeting["event"]["event_id"]) for meeting in get_meetings(db, user.id)]
 
 # Obtener toda la informacion de una reunion por su id
 @router.get("/meetings/{meeting_id}", response_model=MeetingCreate)
@@ -141,10 +141,30 @@ def update_meeting_endpoint(meeting_id:int, meeting: MeetingUpdate, db: Session 
 
 ################### GROUPS ##########################
 
+# Actualizar el nivel de jerarquia de un usuario
+@router.put("/groups/{group_id}/users/{user_id}/hierarchy/{hierarchy}")
+def update_hierarchy_level_endpoint(group_id: int, user_id: int, hierarchy: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    current_user_hierarchy = get_hierarchy_level(db, current_user.id, group_id)
+    if current_user_hierarchy >= hierarchy:
+        return update_hierarchy_level(db, user_id, group_id, hierarchy)
+    else:
+        raise HTTPException(status_code=404, detail="Update denied")
+
+# Aceptar la invitacion a un grupo
+@router.put("/groups/{group_id}/users/me")
+def accept_group_invitation_endpoint(group_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    user_hierarchy = get_hierarchy_level(db, user.id, group_id)
+    if user_hierarchy < 0:
+        return update_hierarchy_level(db, user.id, group_id, user_hierarchy * -1)
+    else:
+        raise HTTPException(status_code=404, detail="Failed acceptance")
+    
+    
 # Crear un nuevo grupo
-@router.post("/groups/", response_model=GroupResponse)
-def create_group_endpoint(group: GroupCreate, db: Session = Depends(get_db)):
-    return create_group(db, group)
+@router.post("/groups/{hierarchy}", response_model=GroupResponse)
+def create_group_endpoint(group: GroupCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user), hierarchy:int = 0):
+    group = create_group(db, group)
+    return add_user_to_group(db, user.id, group.id, hierarchy)
 
 # Obtener un grupo por su ID
 @router.get("/groups/{group_id}", response_model=GroupResponse)
@@ -176,11 +196,14 @@ def delete_group_endpoint(group_id: int, db: Session = Depends(get_db)):
     return group
 
 # Añadir un usuario a un grupo
-@router.post("/groups/{group_id}/user/", response_model=GroupResponse)
-def add_user_to_group_endpoint(group_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    group = add_user_to_group(db, user.id, group_id)
-    if group is None:
-        raise HTTPException(status_code=404, detail="Group or User not found")
+@router.post("/groups/{group_id}/users/{user_email}/level/{hierarchy}", response_model=GroupResponse)
+def add_user_to_group_endpoint(group_id: int, hierarchy: int, user_email:str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    groups = [group.id for group in get_user_groups(db, user.id)]
+    if group_id in groups:
+        user_id = get_user_by_email(db, user_email).id
+        group = add_user_to_group(db, user_id, group_id, hierarchy)
+    else:
+        raise HTTPException(status_code=404, detail="You do not have permission to add a user to this group.")
     return group
 
 # Eliminar un usuario de un grupo
@@ -219,3 +242,12 @@ def get_events_in_group_endpoint(group_id: int, db: Session = Depends(get_db), u
 @router.post("/groups/{group_id}/meetings/user/", response_model=MeetingResponse)
 def create_group_meeting_endpoint(group_id: int, meeting: MeetingCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return create_group_meeting(db, users_email= meeting.users_email, state=meeting.state, event_id= meeting.event_id, user_id=user.id, group_id=group_id)
+
+# Obtener los grupos a los que se me esta invitando
+@router.get("/groups/users/invited_groups", response_model=List[GroupResponse])
+def get_invited_groups_endpoint(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group_ids = get_invited_groups(db, user.id)
+    if group_ids.len == 0:
+        return []
+    groups = db.query(Group).filter(Group.id.in_(group_ids)).all()
+    return groups
