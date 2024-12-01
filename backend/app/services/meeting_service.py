@@ -42,13 +42,16 @@ def add_meetings(db: Session, meetings: list[Meeting]):
     return meetings
 
 # Obtener una reunion por el id
-def get_meeting_by_id(db: Session, meeting_id: int):
+def get_meeting_by_id(db: Session, meeting_id: int, user_id: int):
     meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
     meetings = db.query(Meeting).filter(Meeting.event_id == meeting.event_id).all()
     result = []
     confirmed = True
     cancelled = False
+    is_in = False
     for meeting in meetings:
+        if meeting.user_id == user_id:
+            is_in = True
         user = get_user_by_id(db, meeting.user_id)
         if user:
             result.append(user.email)
@@ -63,7 +66,7 @@ def get_meeting_by_id(db: Session, meeting_id: int):
     else:
         state = 'pending'
     
-    return (state, result, meeting.event_id)
+    return (state, result, meeting.event_id, is_in)
 
 
 
@@ -72,9 +75,9 @@ def get_meetings(db: Session, user_id: int):
     return db.query(Meeting).filter(Meeting.user_id == user_id)
 
 # Actualizar una reunion por ID
-def update_meeting(db: Session, meeting_id: int, new_event_id: int, new_state: str):
+def update_meeting(db: Session, meeting_id: int, new_event_id: int, new_state: str, user_id : int):
     meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if meeting:
+    if meeting and meeting.user_id == user_id:
         meeting.event_id = new_event_id
         meeting.state = new_state
         db.commit()
@@ -82,9 +85,9 @@ def update_meeting(db: Session, meeting_id: int, new_event_id: int, new_state: s
     return meeting
 
 # Eliminar una reunion por ID
-def delete_meeting(db: Session, meeting_id: int):
+def delete_meeting(db: Session, meeting_id: int, user_id: int):
     meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if meeting:
+    if meeting and meeting.user_id == user_id:
         db.delete(meeting)
         db.commit()
     return meeting

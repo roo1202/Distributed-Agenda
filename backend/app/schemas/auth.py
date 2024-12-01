@@ -8,3 +8,5 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: str | None = None
 
+    class Config:
+        from_attributes  = True
