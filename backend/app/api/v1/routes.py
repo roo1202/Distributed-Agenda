@@ -112,9 +112,9 @@ def create_meeting_endpoint(meeting: MeetingCreate, db: Session = Depends(get_db
     return create_meeting(db, users_email= meeting.users_email, state= meeting.state, event_id= meeting.event_id, user_id=user.id)
 
 # Obtener todas las reuniones de un usuario
-@router.get("/meetings/user/", response_model=List[MeetingResponse])
+@router.get("/meetings/user/", response_model=List[MeetingInfo])
 def get_meetings_endpoint(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return get_meetings(db, user.id)
+    return [MeetingInfo(state=meeting["state"], user_email=meeting["event"]["user_email"], event_description=meeting["event"]["description"], start_time=meeting["event"]["start_time"],end_time = meeting["event"]["end_time"], id=meeting["meeting_id"], event_id= meeting["event"]["event_id"]) for meeting in get_meetings(db, user.id)]
 
 # Obtener toda la informacion de una reunion por su id
 @router.get("/meetings/{meeting_id}", response_model=MeetingCreate)

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.meeting import Meeting
 from app.schemas.meeting import MeetingCreate
 from app.models.user import User
+from app.models.event import Event
 from app.services.group_service import get_hierarchy_level
 from .user_service import get_user_by_id
 
@@ -107,7 +108,27 @@ def get_meeting_by_id(db: Session, meeting_id: int, user_id: int):
 
 # Obtener todas las reuniones de un usuario
 def get_meetings(db: Session, user_id: int): 
-    return db.query(Meeting).filter(Meeting.user_id == user_id)
+    meetings = db.query(Meeting).filter(Meeting.user_id == user_id).all()
+    meetings_with_events = []
+
+    for meeting in meetings:
+        event = db.query(Event).filter(Event.id == meeting.event_id).first()
+        user_email = get_user_by_id(db, event.user_id).email
+        meeting_data = {
+            "meeting_id": meeting.id,
+            "state": meeting.state,
+            "event": {
+                "event_id": event.id,
+                "description": event.description,
+                "start_time": event.start_time,
+                "end_time": event.end_time,
+                "user_email" : user_email
+            }
+        }
+        meetings_with_events.append(meeting_data)
+
+    return meetings_with_events
+    
 
 # Actualizar una reunion por ID
 def update_meeting(db: Session, meeting_id: int, new_event_id: int, new_state: str, user_id : int):
