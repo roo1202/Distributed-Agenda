@@ -9,7 +9,10 @@
                     <button class="notification-button" @click="toggleNotificationsPanel">🔔</button>
                 </div>
 
-                <div v-for="evento in sortedEventos" :key="evento.id" class="evento" @click="toggleDetails(evento.id)">
+                <div v-for="evento in enhancedEventos" :key="evento.id"
+                    :class="['evento', getEventStateClass(evento.start_time, evento.end_time)]"
+                    @click="toggleDetails(evento.id)">
+
                     <div class="container-p">
                         <p>{{ evento.description }}
                         </p>
@@ -23,8 +26,9 @@
                     <div v-if="evento.showDetails">
                         <p>Inicio: {{ evento.start_time }}</p>
                         <p>Fin: {{ evento.end_time }}</p>
-                        <p>Estado: {{ evento.state }}</p>
+                        <p>Estado: {{ getEventState(evento.start_time, evento.end_time) }}</p>
                     </div>
+
 
                     <div v-if="selectedEventId === evento.id && showEmailInput" class="email-input-container"
                         @click.stop>
@@ -69,14 +73,8 @@
                             <label for="end_time">Fin:</label>
                             <input type="datetime-local" id="end_time" v-model="newEvent.end_time" required>
                         </div>
-                        <div>
-                            <label for="state">Estado:</label>
-                            <select id="state" v-model="newEvent.state" required>
-                                <option value="pendiente">Pendiente</option>
-                                <option value="completado">Completado</option>
-                            </select>
-                        </div>
-                        <button type="submit">Crear</button>
+                        <p v-if="dateError" class="error-message">La fecha de inicio debe ser menor o igual que la fecha de fin.</p>
+                        <button type="submit" :disabled="dateError">Crear</button>
                     </form>
                 </div>
                 <div v-if="showEditEvent" class="edit-event">
@@ -90,22 +88,16 @@
                         </div>
                         <div>
                             <label for="edit_start_time">Inicio:</label>
-                            <input type="datetime-local" id="edit_start_time" v-model="editEventDetails.start_time"
-                                required>
+                            <input type="datetime-local" id="edit_start_time" v-model="editEventDetails.start_time" required>
                         </div>
                         <div>
                             <label for="edit_end_time">Fin:</label>
-                            <input type="datetime-local" id="edit_end_time" v-model="editEventDetails.end_time"
-                                required>
+                            <input type="datetime-local" id="edit_end_time" v-model="editEventDetails.end_time" required>
                         </div>
-                        <div>
-                            <label for="edit_state">Estado:</label>
-                            <select id="edit_state" v-model="editEventDetails.state" required>
-                                <option value="pendiente">Pendiente</option>
-                                <option value="completado">Completado</option>
-                            </select>
-                        </div>
-                        <button type="submit">Actualizar</button>
+                        {{dateErrorEdit}}
+                        {{ editEventDetails }}
+                        <p v-if="dateErrorEdit" class="error-message">La fecha de inicio debe ser menor o igual que la fecha de fin.</p>
+                        <button type="submit" :disabled="dateErrorEdit">Actualizar</button>
                     </form>
                 </div>
             </div>
@@ -138,6 +130,21 @@ const editEventDetails = ref({
     state: 'pendiente'
 });
 
+const dateError = computed(() => {
+    const start = new Date(newEvent.value.start_time);
+    const end = new Date(newEvent.value.end_time);
+    return start > end; // Devuelve true si la fecha de inicio es mayor que la de fin
+});
+
+const dateErrorEdit = computed(() => {
+    const start = new Date(editEventDetails.value.start_time);
+    const end = new Date(editEventDetails.value.end_time);
+    console.log(start)
+    console.log(end);
+    return start > end; // Devuelve true si la fecha de inicio es mayor que la de fin
+});
+
+
 const sortedEventos = computed(() => {
     return eventos.value.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
 });
@@ -159,6 +166,10 @@ const closeForm = () => {
 };
 
 const createEvent = async () => {
+    if (dateError.value) {
+        alert("Corrige las fechas antes de crear el evento.");
+        return;
+    }
     try {
         const response = await axios.post(EVENTS_USER, newEvent.value, {
             headers: {
@@ -184,6 +195,10 @@ const editEvent = (evento) => {
 };
 
 const updateEvent = async () => {
+    if (dateErrorEdit.value) {
+        alert("Corrige las fechas antes de editar el evento.");
+        return;
+    }
     try {
         const response = await axios.put(`${EVENTS}${editEventDetails.value.id}`, editEventDetails.value, {
             headers: {
@@ -278,6 +293,35 @@ const closeEmailInput = () => {
     showEmailInput.value = false;
 };
 
+const getEventState = (startTime, endTime) => {
+    const now = new Date();
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    if (now < start) {
+        return "Pendiente";
+    } else if (now >= start && now <= end) {
+        return "En Progreso";
+    } else {
+        return "Completado";
+    }
+};
+
+const enhancedEventos = computed(() => {
+    return eventos.value.map(evento => ({
+        ...evento,
+        state: getEventState(evento.start_time, evento.end_time)
+    }));
+});
+
+const getEventStateClass = (startTime, endTime) => {
+    const state = getEventState(startTime, endTime);
+    if (state === "Pendiente") return "evento-pendiente";
+    if (state === "En Progreso") return "evento-progreso";
+    if (state === "Completado") return "evento-completado";
+};
+
+
 onMounted(async () => {
     if (route.query.token) {
         token.value = route.query.token;
@@ -353,6 +397,7 @@ h2 {
     margin-bottom: 20px;
 }
 
+/* Estilo base para los eventos */
 .evento {
     padding: 10px;
     margin-bottom: 10px;
@@ -360,6 +405,25 @@ h2 {
     border-radius: 4px;
     cursor: pointer;
     background-color: #f9f9f9;
+    transition: background-color 0.3s ease, border 0.3s ease;
+}
+
+/* Estilo para eventos pendientes */
+.evento-pendiente {
+    border-color: #ffc107;
+    background-color: #fff9e6;
+}
+
+/* Estilo para eventos en progreso */
+.evento-progreso {
+    border-color: #007bff;
+    background-color: #e6f3ff;
+}
+
+/* Estilo para eventos completados */
+.evento-completado {
+    border-color: #28a745;
+    background-color: #e6ffe6;
 }
 
 .evento p {
@@ -493,6 +557,13 @@ select {
     cursor: pointer;
     color: red;
 }
+
+.error-message {
+    color: red;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
 </style>
 
 <style>

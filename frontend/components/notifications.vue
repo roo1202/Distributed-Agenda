@@ -6,7 +6,7 @@
         </div>
         <ul>
             <li v-for="notification in notifications" :key="notification.id">
-                {{ notification.message }}
+                {{ notification }}
             </li>
         </ul>
     </div>
@@ -15,13 +15,13 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import { MEETINGS } from '~/public/config';
+import { MEETINGS, MEETING } from '~/public/config';
 
 const notifications = ref([]);
 const isVisible = ref(true); // Controla la visibilidad
 
 const props = defineProps({
-    token : {
+    token: {
         type: String,
         required: true
     }
@@ -29,12 +29,22 @@ const props = defineProps({
 
 onMounted(async () => {
     try {
-        const response = await axios.get(MEETINGS,{
+        const response = await axios.get(MEETINGS, {
             headers: {
                 'Authorization': `Bearer ${props.token}`
             }
         });
-        notifications.value = response.data;
+        notifications.value = await Promise.all(
+            response.data.map(value =>
+                axios.get(MEETING + value.id, {
+                    headers: {
+                        'Authorization': `Bearer ${props.token}`
+                    }
+                })
+            )
+        );
+        notifications.value = notifications.value.map(value => value.data);
+
     } catch (err) {
         console.log(err);
     }

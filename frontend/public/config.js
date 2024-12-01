@@ -7,6 +7,7 @@ const LOGIN_ENDPOINT = `${BASE_URL}auth/token`;
 const EVENTS_USER = `${BASE_URL_API_V1}events/user/`;
 const EVENTS = `${BASE_URL_API_V1}events/`;
 const MEETINGS = `${BASE_URL_API_V1}meetings/user/`;
+const MEETING = `${BASE_URL_API_V1}meetings/`;
 
 
 const LOGIN_PAGE = `/`;
@@ -25,5 +26,6 @@ export {
   HOME_PAGE,
   EVENTS_USER,
   EVENTS,
-  MEETINGS
+  MEETINGS,
+  MEETING
 };
