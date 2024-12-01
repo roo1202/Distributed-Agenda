@@ -4,33 +4,15 @@
     <form @submit.prevent="register">
       <div>
         <label for="name">Nombre:</label>
-        <input
-          id="name"
-          v-model="name"
-          type="text"
-          placeholder="Ingresa tu nombre"
-          required
-        />
+        <input id="name" v-model="name" type="text" placeholder="Ingresa tu nombre" required />
       </div>
       <div>
         <label for="email">Correo electrónico:</label>
-        <input
-          id="email"
-          v-model="email"
-          type="email"
-          placeholder="Ingresa tu correo"
-          required
-        />
+        <input id="email" v-model="email" type="email" placeholder="Ingresa tu correo" required />
       </div>
       <div>
         <label for="password">Contraseña:</label>
-        <input
-          id="password"
-          v-model="password"
-          type="password"
-          placeholder="Ingresa tu contraseña"
-          required
-        />
+        <input id="password" v-model="password" type="password" placeholder="Ingresa tu contraseña" required />
       </div>
       <button type="submit" :disabled="loading">
         {{ loading ? "Cargando..." : "Registrarse" }}
@@ -44,7 +26,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
-import { USERS_ENDPOINT, LOGIN_PAGE } from '~/public/config';
+import { REGISTER_ENDPOINT, LOGIN_PAGE } from '~/public/config';
 
 const name = ref('');
 const email = ref('');
@@ -58,11 +40,17 @@ const register = async () => {
   error.value = null;
 
   try {
-    const response = await axios.post(USERS_ENDPOINT, {
+    const response = await axios.post(REGISTER_ENDPOINT, {
       name: name.value,
       email: email.value,
       password: password.value,
-    });
+    },
+      {
+        headers: {
+          // No incluir el token en esta solicitud
+          Authorization: ''
+        }
+      });
 
     if (response.status !== 200) {
       throw new Error('Network response was not ok');

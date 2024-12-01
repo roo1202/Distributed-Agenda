@@ -4,23 +4,11 @@
     <form @submit.prevent="handleLogin">
       <div>
         <label for="email">Correo electrónico:</label>
-        <input
-          id="email"
-          v-model="email"
-          type="email"
-          placeholder="Ingresa tu correo"
-          required
-        />
+        <input id="email" v-model="email" type="email" placeholder="Ingresa tu correo" required />
       </div>
       <div>
         <label for="password">Contraseña:</label>
-        <input
-          id="password"
-          v-model="password"
-          type="password"
-          placeholder="Ingresa tu contraseña"
-          required
-        />
+        <input id="password" v-model="password" type="password" placeholder="Ingresa tu contraseña" required />
       </div>
       <button type="submit" :disabled="loading">
         {{ loading ? "Cargando..." : "Iniciar sesión" }}
@@ -36,7 +24,9 @@
 <script setup>
 import { ref } from 'vue';
 import { useCookie, useRouter } from '#imports';
-import { REGISTER_PAGE } from '~/public/config';
+import { REGISTER_PAGE, LOGIN_ENDPOINT, HOME_PAGE } from '~/public/config';
+import axios from 'axios';
+import qs from 'qs';
 
 // Estado local para el formulario y la carga
 const email = ref('');
@@ -53,19 +43,32 @@ const handleLogin = async () => {
 
   try {
     // Realizar la solicitud al backend
-    const response = await $fetch('/auth/login', {
-      method: 'POST',
-      body: { email: email.value, password: password.value },
-    });
+    const response = await axios.post(LOGIN_ENDPOINT, qs.stringify({
+      username: email.value,
+      password: password.value,
+    }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          
+          // No incluir el token en esta solicitud
+          Authorization: ''
+        }
+      });
 
     // Guardar el token en una cookie
     const authToken = useCookie('auth_token');
-    authToken.value = response.token;
+    authToken.value = response.data.access_token;
 
+    if (authToken.value) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${authToken.value}`;
+    }
+    
     // Redirigir a la nueva página con el token como parámetro de consulta
-    await router.push({ path: '/new-page', query: { token: response.token } });
+    await router.push({ path: HOME_PAGE, query: { token: authToken.value } });
   } catch (err) {
     // Manejar errores
+    console.log(err)
     error.value = err?.data?.message || 'Error al iniciar sesión';
   } finally {
     loading.value = false;
