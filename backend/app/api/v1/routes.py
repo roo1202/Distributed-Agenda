@@ -93,7 +93,7 @@ def delete_event_endpoint(event_id: int, db: Session = Depends(get_db), user: Us
     return event
 
 # Actualizar la informacion de un evento
-@router.post("/events/{event_id}", response_model=EventResponse)
+@router.put("/events/{event_id}", response_model=EventResponse)
 def update_event_endpoint(event_id:int, event: EventCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return update_event(db, event_id=event_id, new_description= event.description, new_start_time=event.start_time, new_end_time = event.end_time, new_state= event.state, user_id = user.id)
 
