@@ -1,7 +1,12 @@
+
+from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.group import Group
 from app.schemas.group import GroupCreate, GroupUpdate
 from app.models.user import User
+from app.models.group_user_association import association_table
+from app.models.event import Event
 
 # Añadir un usuario a un grupo
 def add_user_to_group(db: Session, user_id: int, group_id: int):
@@ -32,6 +37,28 @@ def get_users_in_group(db: Session, group_id: int):
         user_emails.append(user.email)
     
     return user_emails
+
+# Obtener todos los eventos de un grupo por su id
+def get_events_in_group(db: Session, group_id: int, user_id: int):
+    user_in_group = db.execute(
+        select([association_table.c.user_id])
+        .where(association_table.c.group_id == group_id)
+        .where(association_table.c.user_id == user_id)
+    ).fetchone()
+
+    if not user_in_group:
+        raise HTTPException(status_code=403, detail="User does not belong to the group")
+
+    users_in_group = db.execute(
+        select([association_table.c.user_id])
+        .where(association_table.c.group_id == group_id)
+    ).fetchall()
+
+    user_ids = [user.user_id for user in users_in_group]
+
+    events = db.query(Event).filter(Event.user_id.in_(user_ids)).all()
+
+    return [event for event in events]
 
 # Obtener todos los grupos de un usuario
 def get_user_groups(db: Session, user_id: int):
