@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.services.user_service import *
 from app.schemas.user import UserCreate, UserResponse, UserBase
 from app.db.session import SessionLocal
-from app.schemas.event import EventResponse, EventBase, EventCreate
+from app.schemas.event import EventPrivate, EventResponse, EventBase, EventCreate
 from app.schemas.group import GroupCreate, GroupUpdate, GroupResponse
 from app.services.event_service import *
 from app.schemas.meeting import *
@@ -79,10 +79,16 @@ def get_user_endpoint(user_email: str, db: Session = Depends(get_db)):
 def create_event_endpoint(event: EventCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return create_event(db, description=event.description, start_time=event.start_time, end_time=event.end_time, state=event.state, user_id=user.id)
 
-# Obtener los eventos de un usuario por su id
+# Obtener los eventos del propio usuario
 @router.get("/events/user/", response_model=List[EventResponse])
 def get_events_endpoint(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return get_events(db, user.id)
+
+# Obtener los eventos de un usuario por su email
+@router.get("/events/user/", response_model=List[EventPrivate])
+def get_events_endpoint(user_id : int, db: Session = Depends(get_db)):
+    return get_events(db, user_id)
+    
 
 # Elimina un evento por su id
 @router.delete("/events/{event_id}", response_model=EventBase)
@@ -200,3 +206,16 @@ def get_users_in_group_endpoint(group_id: int, db: Session = Depends(get_db), us
     if not user_emails or user.email not in user_emails:
         raise HTTPException(status_code=404, detail="Group not found or no users in group")
     return user_emails
+
+# Obtener todos los eventos de un grupo
+@router.get("/groups/{group_id}/events", response_model=List[EventPrivate])
+def get_events_in_group_endpoint(group_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    events = get_events_in_group(db, group_id, user.id)
+    if not events:
+        raise HTTPException(status_code=404, detail="Group not found or no events in group")
+    return events
+
+# Crear una reunion con miembros del grupo
+@router.post("/groups/{group_id}/meetings/user/", response_model=MeetingResponse)
+def create_group_meeting_endpoint(group_id: int, meeting: MeetingCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return create_group_meeting(db, users_email= meeting.users_email, state=meeting.state, event_id= meeting.event_id, user_id=user.id, group_id=group_id)

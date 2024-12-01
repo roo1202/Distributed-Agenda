@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.meeting import Meeting
 from app.schemas.meeting import MeetingCreate
 from app.models.user import User
+from app.services.group_service import get_hierarchy_level
 from .user_service import get_user_by_id
 
 # Crear una nueva reunion
@@ -23,7 +24,41 @@ def create_meeting(db: Session, users_email: list[str], state: str, event_id: in
 
     new_meeting = Meeting(
                 user_id = user_id,
-                state=state,
+                state="confirmed",
+                event_id = event_id
+            )
+
+    meetings.append(new_meeting)
+
+    add_meetings(db, meetings)
+    
+    return new_meeting
+
+# Crear una nueva reunion de grupo
+def create_group_meeting(db: Session, users_email: list[str], state: str, event_id: int, user_id: int, group_id: int):
+    meetings : list[Meeting] = []
+    level = get_hierarchy_level(db, user_id=user_id, group_id=group_id)
+    for email in users_email:
+        user = db.query(User).filter(User.email == email).first()
+        if user is None:
+            raise HTTPException(status_code=404, detail=f"User '{email}' not found")
+        else:
+            lev = get_hierarchy_level(db, user_id=user.id, group_id=group_id)
+            if level > lev and lev > 0 : 
+                st = "confirmed"
+            else:
+                st = "pending"
+                
+            new_meeting = Meeting(
+                user_id = user.id,
+                state=st,
+                event_id = event_id
+            )
+            meetings.append(new_meeting)
+
+    new_meeting = Meeting(
+                user_id = user_id,
+                state="confirmed",
                 event_id = event_id
             )
 
