@@ -1,11 +1,10 @@
-# routes/auth.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.schemas.auth import Token
 from app.schemas.user import UserBase, UserCreate
 from app.services.user_service import create_user, get_user_by_email, verify_password
-from app.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_user
+from app.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
 from app.api.v1.routes import get_db
 from datetime import timedelta
 
@@ -32,7 +31,3 @@ def login_for_access_token(db: Session = Depends(get_db), form_data: OAuth2Passw
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
     return {"access_token": access_token, "token_type": "bearer"}
-
-@router.get("/users/me", response_model=UserBase)
-def read_users_me(current_user: User = Depends(get_current_user)):
-    return current_user
