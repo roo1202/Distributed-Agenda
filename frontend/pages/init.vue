@@ -1,5 +1,10 @@
 <template>
     <div class="main-container">
+
+        <div class="logged-user">
+            <span>Bienvenido, {{ userName }}</span>
+        </div>
+    
         <notifications v-if="showNotificationsPanel" @close="toggleNotificationsPanel" :token="token"
             @notification-accepted="addAcceptedEvent" />
 
@@ -114,6 +119,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { EVENTS_USER, EVENTS, MEETINGS } from '~/public/config';
+const userName = ref('');
 
 const route = useRoute();
 const token = ref('');
@@ -341,6 +347,8 @@ onMounted(async () => {
     if (route.query.token) {
         token.value = route.query.token;
 
+        userName.value =  route.query.name;
+
         try {
             const response = await axios.get(EVENTS_USER, {
                 headers: {
@@ -496,6 +504,18 @@ select {
     border: none;
     font-size: 25px;
     cursor: pointer;
+}
+
+/* Estilo para el usuario logueado */
+.logged-user {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #f0f0f0;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 14px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .main-container {
