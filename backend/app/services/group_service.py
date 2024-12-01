@@ -1,6 +1,6 @@
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import insert, select, update
 from sqlalchemy.orm import Session
 from app.models.group import Group
 from app.schemas.group import GroupCreate, GroupUpdate
@@ -9,11 +9,12 @@ from app.models.group_user_association import association_table
 from app.models.event import Event
 
 # Añadir un usuario a un grupo
-def add_user_to_group(db: Session, user_id: int, group_id: int):
+def add_user_to_group(db: Session, user_id: int, group_id: int, hierarchy_level: int = 0):
     user = db.query(User).filter(User.id == user_id).first()
     group = db.query(Group).filter(Group.id == group_id).first()
     if user and group:
-        group.users.append(user)
+        stmt = insert(association_table).values(group_id=group_id, user_id=user_id, hierarchy_level=hierarchy_level)
+        db.execute(stmt)
         db.commit()
     return group
 
@@ -123,3 +124,27 @@ def get_hierarchy_level(db: Session, user_id: int, group_id: int) -> int:
         return result[0]
     else:
         raise HTTPException(status_code=404, detail="Hierarchy level not found")
+    
+# Servicio para obtener los grupos a los que se me esta invitando
+def get_invited_groups(db: Session, user_id: int):
+    result = db.execute(
+        select([association_table.c.group_id])
+        .where(association_table.c.user_id == user_id)
+        .where(association_table.c.hierarchy_level == -1)
+    ).fetchall()
+    if result:
+        return [row[0] for row in result]
+    else:
+        return []
+
+
+# Servicio para modificar el nivel de jerarquia en un grupo
+def update_hierarchy_level(db: Session, user_id: int, group_id: int, new_hierarchy_level: int):
+    stmt = update(association_table).where(
+        (association_table.c.user_id == user_id) &
+        (association_table.c.group_id == group_id)
+    ).values(hierarchy_level=new_hierarchy_level)
+    db.execute(stmt)
+    db.commit()
+    return {"message": "Hierarchy level updated"}
+    
