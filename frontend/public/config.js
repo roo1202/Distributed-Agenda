@@ -6,6 +6,7 @@ const REGISTER_ENDPOINT = `${BASE_URL}auth/register`;
 const LOGIN_ENDPOINT = `${BASE_URL}auth/token`;
 const EVENTS_USER = `${BASE_URL_API_V1}events/user/`;
 const EVENTS = `${BASE_URL_API_V1}events/`;
+const MEETINGS = `${BASE_URL_API_V1}meetings/user/`;
 
 
 const LOGIN_PAGE = `/`;
@@ -23,5 +24,6 @@ export {
   LOGIN_ENDPOINT,
   HOME_PAGE,
   EVENTS_USER,
-  EVENTS
+  EVENTS,
+  MEETINGS
 };
