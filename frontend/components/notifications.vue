@@ -7,7 +7,6 @@
         <ul>
             <li v-for="notification in notifications" :key="notification.id" class="notification-item">
                 <div>
-                    {{ notification }}
                     <p>{{ notification.event_description }} de {{ notification.user_email }}</p>
                 </div>
                 <div class="actions">

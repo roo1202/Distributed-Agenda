@@ -70,7 +70,7 @@ const handleLogin = async () => {
   } catch (err) {
     // Manejar errores
     console.log(err)
-    error.value = err?.data?.message || 'Error al iniciar sesión';
+    error.value = err?.data?.message || 'Usuario o contraseña incorrectos';
   } finally {
     loading.value = false;
   }
