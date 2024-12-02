@@ -1,10 +1,12 @@
 from pydantic import BaseModel
 from datetime import datetime
 
-class EventBase(BaseModel):
-    description: str
+class EventPrivate(BaseModel):
     start_time:datetime
     end_time:datetime
+
+class EventBase(EventPrivate):
+    description: str
 
 class EventCreate(EventBase):
     state : str
@@ -14,4 +16,4 @@ class EventResponse(EventCreate):
     
 
     class Config:
-        orm_mode = True
+        from_attributes  = True

@@ -1,0 +1,3 @@
+axios
+qs
+jwt-decode

@@ -3,3 +3,7 @@ alembic
 uvicorn
 sqlalchemy
 pydantic-settings 
+passlib[bcrypt]
+python-jose[cryptography]
+fastapi
+python-multipart

@@ -1,104 +1,133 @@
 <template>
-    <div class="dashboard">
-      <h1>Mis Agendas</h1>
-  
-      <!-- Sección de fechas más cercanas -->
-      <section>
-        <h2>Fechas Próximas</h2>
-        <ul v-if="upcomingDates.length > 0">
-          <li v-for="date in upcomingDates" :key="date.id">
-            <strong>{{ date.title }}</strong>: {{ formatDate(date.date) }}
-          </li>
-        </ul>
-        <p v-else>No hay eventos próximos.</p>
-      </section>
-  
-      <!-- Sección de agendas -->
-      <section>
-        <h2>Agendas</h2>
-        <ul>
-          <li v-for="agenda in agendas" :key="agenda.id">
-            <strong>{{ agenda.name }}</strong>
-            <button @click="viewAgenda(agenda.id)">Ver Detalles</button>
-          </li>
-        </ul>
-      </section>
-    </div>
-  </template>
-  
-  <script setup>
-  import { ref, onMounted } from 'vue';
-  import { useRouter } from '#imports';
-  
-  // Estado para las agendas y las fechas próximas
-  const agendas = ref([]);
-  const upcomingDates = ref([]);
-  const router = useRouter();
-  
-  // Función para obtener las agendas y eventos cercanos del backend
-  const fetchAgendas = async () => {
-    try {
-      // Solicita las agendas del usuario desde el backend
-      agendas.value = await $fetch('/agendas');
-  
-      // Solicita las fechas próximas
-      upcomingDates.value = await $fetch('/agendas/upcoming');
-    } catch (err) {
-      console.error('Error al obtener las agendas:', err);
-    }
-  };
-  
-  // Formatea las fechas para mostrarlas de forma legible
-  const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
-  
-  // Redirige a la página de detalles de una agenda
-  const viewAgenda = (agendaId) => {
-    router.push(`/agendas/${agendaId}`);
-  };
-  
-  // Llama a la función para cargar los datos al montar el componente
-  onMounted(fetchAgendas);
-  </script>
-  
-  <style scoped>
-  .dashboard {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
-  }
-  
-  h1, h2 {
-    color: #333;
-  }
-  
-  ul {
-    list-style-type: none;
-    padding: 0;
-  }
-  
-  li {
-    margin: 10px 0;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-  }
-  
-  button {
-    margin-top: 5px;
-    padding: 5px 10px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  
-  button:hover {
-    background-color: #0056b3;
-  }
-  </style>
-  
+  <div class="login-page">
+    <h1>Iniciar sesión</h1>
+    <form @submit.prevent="handleLogin">
+      <div>
+        <label for="email">Correo electrónico:</label>
+        <input id="email" v-model="email" type="email" placeholder="Ingresa tu correo" required />
+      </div>
+      <div>
+        <label for="password">Contraseña:</label>
+        <input id="password" v-model="password" type="password" placeholder="Ingresa tu contraseña" required />
+      </div>
+      <button type="submit" :disabled="loading">
+        {{ loading ? "Cargando..." : "Iniciar sesión" }}
+      </button>
+      <button type="button" @click="goToRegister">
+        Registrarse
+      </button>
+      <p v-if="error" class="error">{{ error }}</p>
+    </form>
+  </div>
+</template>
 
+<script setup>
+import { ref } from 'vue';
+import { useCookie, useRouter } from '#imports';
+import { REGISTER_PAGE, LOGIN_ENDPOINT, HOME_PAGE } from '~/public/config';
+import axios from 'axios';
+import qs from 'qs';
+
+// Estado local para el formulario y la carga
+const email = ref('');
+const password = ref('');
+const loading = ref(false);
+const error = ref(null);
+
+// Router para redirigir después de iniciar sesión
+const router = useRouter();
+
+const handleLogin = async () => {
+  loading.value = true;
+  error.value = null;
+
+  try {
+    // Realizar la solicitud al backend
+    const response = await axios.post(LOGIN_ENDPOINT, qs.stringify({
+      username: email.value,
+      password: password.value,
+    }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          
+          // No incluir el token en esta solicitud
+          Authorization: ''
+        }
+      });
+
+    // Guardar el token en una cookie
+    const authToken = useCookie('auth_token');
+    authToken.value = response.data.access_token;
+    const name = response.data.user_name;
+
+    if (authToken.value) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${authToken.value}`;
+    }
+    
+    // Redirigir a la nueva página con el token como parámetro de consulta
+    await router.push({ path: HOME_PAGE, query: { token: authToken.value, name: name } });
+  } catch (err) {
+    // Manejar errores
+    console.log(err)
+    error.value = err?.data?.message || 'Usuario o contraseña incorrectos';
+  } finally {
+    loading.value = false;
+  }
+};
+
+const goToRegister = () => {
+  router.push(REGISTER_PAGE);
+};
+</script>
+
+<style scoped>
+.login-page {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+button:disabled {
+  background-color: #aaa;
+  cursor: not-allowed;
+}
+
+.error {
+  color: red;
+  text-align: center;
+  margin-top: 10px;
+}
+</style>
