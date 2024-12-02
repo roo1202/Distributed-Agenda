@@ -9,29 +9,43 @@ services:
     cap_add:
       - NET_ADMIN
     networks:
-      clients:
-        ipv4_address: 10.0.20.254
-      servers:
-        ipv4_address: 10.0.21.254
-    command: ["sleep", "infinity"] # Mantener el contenedor en ejecución
+      default:
+        ipv4_address: 10.0.0.254
+    command: ["sleep", "infinity"]
 
-  frontend:
+  frontend1:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: frontend
+    container_name: frontend1
     cap_add:
       - NET_ADMIN
     ports:
-      - 3000:3000
-      - 8080:8080
-      - 8000:8000
+      - "3001:3000"
     networks:
-      - clients
+      - default
     volumes:
       - ./frontend:/app
+      - /app/node_modules
     working_dir: /app
-    command: ["sh", "-c", "./frontend.sh && npm run dev"]
+    command: ["npm", "run", "dev"]
+
+  frontend2:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend2
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "3002:3000"
+    networks:
+      - default
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    working_dir: /app
+    command: ["npm", "run", "dev"]
 
   backend:
     build:
@@ -40,22 +54,18 @@ services:
     container_name: backend
     cap_add:
       - NET_ADMIN
+    ports:
+      - "8000:8000"
     networks:
-      - servers
+      - default
     volumes:
       - ./backend:/app
     working_dir: /app
-    command: ["sh", "-c", "./backend.sh && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 networks:
-  clients:
+  default:
     driver: bridge
     ipam:
       config:
-        - subnet: 10.0.20.0/24
-
-  servers:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.0.21.0/24
+        - subnet: 10.0.0.0/24
