@@ -59,17 +59,18 @@ const handleLogin = async () => {
     // Guardar el token en una cookie
     const authToken = useCookie('auth_token');
     authToken.value = response.data.access_token;
+    const name = response.data.user_name;
 
     if (authToken.value) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${authToken.value}`;
     }
     
     // Redirigir a la nueva página con el token como parámetro de consulta
-    await router.push({ path: HOME_PAGE, query: { token: authToken.value } });
+    await router.push({ path: HOME_PAGE, query: { token: authToken.value, name: name } });
   } catch (err) {
     // Manejar errores
     console.log(err)
-    error.value = err?.data?.message || 'Error al iniciar sesión';
+    error.value = err?.data?.message || 'Usuario o contraseña incorrectos';
   } finally {
     loading.value = false;
   }

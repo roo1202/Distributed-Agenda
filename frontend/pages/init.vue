@@ -1,6 +1,12 @@
 <template>
     <div class="main-container">
-        <notifications v-if="showNotificationsPanel" @close="toggleNotificationsPanel" :token="token" />
+
+        <div class="logged-user">
+            <span>Bienvenido, {{ userName }}</span>
+        </div>
+    
+        <notifications v-if="showNotificationsPanel" @close="toggleNotificationsPanel" :token="token"
+            @notification-accepted="addAcceptedEvent" />
 
         <div class="container">
             <div class="new-page">
@@ -24,8 +30,8 @@
                     </div>
 
                     <div v-if="evento.showDetails">
-                        <p>Inicio: {{ evento.start_time }}</p>
-                        <p>Fin: {{ evento.end_time }}</p>
+                        <p>Inicio: {{ new Date(evento.start_time) }}</p>
+                        <p>Fin: {{ new Date(evento.end_time) }}</p>
                         <p>Estado: {{ getEventState(evento.start_time, evento.end_time) }}</p>
                     </div>
 
@@ -73,7 +79,8 @@
                             <label for="end_time">Fin:</label>
                             <input type="datetime-local" id="end_time" v-model="newEvent.end_time" required>
                         </div>
-                        <p v-if="dateError" class="error-message">La fecha de inicio debe ser menor o igual que la fecha de fin.</p>
+                        <p v-if="dateError" class="error-message">La fecha de inicio debe ser menor o igual que la fecha
+                            de fin.</p>
                         <button type="submit" :disabled="dateError">Crear</button>
                     </form>
                 </div>
@@ -88,15 +95,17 @@
                         </div>
                         <div>
                             <label for="edit_start_time">Inicio:</label>
-                            <input type="datetime-local" id="edit_start_time" v-model="editEventDetails.start_time" required>
+                            <input type="datetime-local" id="edit_start_time" v-model="editEventDetails.start_time"
+                                required>
                         </div>
                         <div>
                             <label for="edit_end_time">Fin:</label>
-                            <input type="datetime-local" id="edit_end_time" v-model="editEventDetails.end_time" required>
+                            <input type="datetime-local" id="edit_end_time" v-model="editEventDetails.end_time"
+                                required>
                         </div>
-                        {{dateErrorEdit}}
-                        {{ editEventDetails }}
-                        <p v-if="dateErrorEdit" class="error-message">La fecha de inicio debe ser menor o igual que la fecha de fin.</p>
+                        
+                        <p v-if="dateErrorEdit" class="error-message">La fecha de inicio debe ser menor o igual que la
+                            fecha de fin.</p>
                         <button type="submit" :disabled="dateErrorEdit">Actualizar</button>
                     </form>
                 </div>
@@ -110,6 +119,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { EVENTS_USER, EVENTS, MEETINGS } from '~/public/config';
+const userName = ref('');
 
 const route = useRoute();
 const token = ref('');
@@ -139,8 +149,6 @@ const dateError = computed(() => {
 const dateErrorEdit = computed(() => {
     const start = new Date(editEventDetails.value.start_time);
     const end = new Date(editEventDetails.value.end_time);
-    console.log(start)
-    console.log(end);
     return start > end; // Devuelve true si la fecha de inicio es mayor que la de fin
 });
 
@@ -268,7 +276,7 @@ const sendNotifications = async (eventId) => {
         await axios.post(MEETINGS, {
             event_id: eventId,
             users_email: emailList.value,
-            state: 'pendiente'
+            state: 'pending'
         },
             {
                 headers: {
@@ -321,10 +329,25 @@ const getEventStateClass = (startTime, endTime) => {
     if (state === "Completado") return "evento-completado";
 };
 
+const addAcceptedEvent = async (event) => {
+    eventos.value.push(event);
+
+    try {
+        const response = await axios.post(EVENTS_USER, event, {
+            headers: {
+                'Authorization': `Bearer ${token.value}`
+            }
+        });
+    } catch (err) {
+        console.log(err);
+    }
+};
 
 onMounted(async () => {
     if (route.query.token) {
         token.value = route.query.token;
+
+        userName.value =  route.query.name;
 
         try {
             const response = await axios.get(EVENTS_USER, {
@@ -483,6 +506,18 @@ select {
     cursor: pointer;
 }
 
+/* Estilo para el usuario logueado */
+.logged-user {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #f0f0f0;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 14px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .main-container {
     display: flex;
     width: 100%;
@@ -563,7 +598,6 @@ select {
     font-size: 14px;
     margin-top: 5px;
 }
-
 </style>
 
 <style>
