@@ -68,7 +68,7 @@ def delete_user_endpoint(db: Session = Depends(get_db), user: User = Depends(get
 def get_user_endpoint(user_email: str, db: Session = Depends(get_db)):
     user = get_user_by_email(db, user_email)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        return UserResponse(email="User %s not found" % user_email, id= 0)
     return user
 
 

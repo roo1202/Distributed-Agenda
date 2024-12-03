@@ -1,0 +1,71 @@
+version: "3.8"
+
+services:
+  router:
+    build:
+      context: .
+      dockerfile: docker/router.Dockerfile
+    container_name: router
+    cap_add:
+      - NET_ADMIN
+    networks:
+      default:
+        ipv4_address: 10.0.0.254
+    command: ["sleep", "infinity"]
+
+  frontend1:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend1
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "3001:3000"
+    networks:
+      - default
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    working_dir: /app
+    command: ["npm", "run", "dev"]
+
+  frontend2:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend2
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "3002:3000"
+    networks:
+      - default
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    working_dir: /app
+    command: ["npm", "run", "dev"]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "8000:8000"
+    networks:
+      - default
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
