@@ -4,112 +4,121 @@
         <div class="logged-user">
             <span>Bienvenido, {{ userName }}</span>
         </div>
-    
+
         <notifications v-if="showNotificationsPanel" @close="toggleNotificationsPanel" :token="token"
             @notification-accepted="addAcceptedEvent" />
+        <div class="container-all">
 
-        <div class="container">
-            <div class="new-page">
-                <div class="header">
-                    <h1>Mi agenda</h1>
-                    <button class="notification-button" @click="toggleNotificationsPanel">🔔</button>
+            <div class="container">
+                <div class="new-page">
+                    <div class="header">
+                        <h1>Mi agenda</h1>
+                        <button class="notification-button" @click="toggleNotificationsPanel">🔔</button>
+                    </div>
+
+                    <div v-for="evento in enhancedEventos" :key="evento.id"
+                        :class="['evento', getEventStateClass(evento.start_time, evento.end_time)]"
+                        @click="toggleDetails(evento.id)">
+
+                        <div class="container-p">
+                            <p>{{ evento.description }}
+                            </p>
+                            <div>
+                                <button class="edit-button" @click.stop="editEvent(evento)">✏️</button>
+                                <button class="delete-button" @click.stop="deleteEvent(evento.id)">🗑️</button>
+                                <button class="add-user-button" @click.stop="openEmailInput(evento.id)">👤+</button>
+                            </div>
+                        </div>
+
+                        <div v-if="evento.showDetails">
+                            <p>Inicio: {{ new Date(evento.start_time) }}</p>
+                            <p>Fin: {{ new Date(evento.end_time) }}</p>
+                            <p>Estado: {{ getEventState(evento.start_time, evento.end_time) }}</p>
+                        </div>
+
+
+                        <div v-if="selectedEventId === evento.id && showEmailInput" class="email-input-container"
+                            @click.stop>
+                            <div class="email-header">
+                                <h3>Agregar correos para el evento</h3>
+                                <button class="close-email-button" @click.stop="closeEmailInput">❌</button>
+                            </div>
+                            <div class="email-input">
+                                <input type="email" v-model="newEmail" placeholder="Escribe un correo y presiona Enter"
+                                    @keyup.enter.stop="addEmail" />
+                                <ul>
+                                    <li v-for="(email, index) in emailList" :key="index" class="li-sep">
+                                        {{ email }} <button @click.stop="removeEmail(index)" class="close-email-button"
+                                            style="font-size: 10px;">❌</button>
+                                    </li>
+                                </ul>
+                                <button @click.stop="sendNotifications(evento.id)" class="send-button">Enviar
+                                    notificaciones</button>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
-
-                <div v-for="evento in enhancedEventos" :key="evento.id"
-                    :class="['evento', getEventStateClass(evento.start_time, evento.end_time)]"
-                    @click="toggleDetails(evento.id)">
-
-                    <div class="container-p">
-                        <p>{{ evento.description }}
-                        </p>
-                        <div>
-                            <button class="edit-button" @click.stop="editEvent(evento)">✏️</button>
-                            <button class="delete-button" @click.stop="deleteEvent(evento.id)">🗑️</button>
-                            <button class="add-user-button" @click.stop="openEmailInput(evento.id)">👤+</button>
+                <div class="create-event-container">
+                    <button class="toggle-button" @click="toggleCreateEvent">+</button>
+                    <div v-if="showCreateEvent" class="create-event">
+                        <div class="container-p">
+                            <h2>Crear Evento</h2>
+                            <button class="close-button" @click="closeForm">❌</button>
                         </div>
+
+                        <form @submit.prevent="createEvent">
+                            <div>
+                                <label for="description">Descripción:</label>
+                                <input type="text" id="description" v-model="newEvent.description" required>
+                            </div>
+                            <div>
+                                <label for="start_time">Inicio:</label>
+                                <input type="datetime-local" id="start_time" v-model="newEvent.start_time" required>
+                            </div>
+                            <div>
+                                <label for="end_time">Fin:</label>
+                                <input type="datetime-local" id="end_time" v-model="newEvent.end_time" required>
+                            </div>
+                            <p v-if="dateError" class="error-message">La fecha de inicio debe ser menor o igual que la
+                                fecha
+                                de fin.</p>
+                            <button type="submit" :disabled="dateError">Crear</button>
+                        </form>
                     </div>
+                    <div v-if="showEditEvent" class="edit-event">
+                        <h2 class="container-p">Editar Evento <button class="close-button" @click="closeForm">❌</button>
+                        </h2>
 
-                    <div v-if="evento.showDetails">
-                        <p>Inicio: {{ new Date(evento.start_time) }}</p>
-                        <p>Fin: {{ new Date(evento.end_time) }}</p>
-                        <p>Estado: {{ getEventState(evento.start_time, evento.end_time) }}</p>
+                        <form @submit.prevent="updateEvent">
+                            <div>
+                                <label for="edit_description">Descripción:</label>
+                                <input type="text" id="edit_description" v-model="editEventDetails.description"
+                                    required>
+                            </div>
+                            <div>
+                                <label for="edit_start_time">Inicio:</label>
+                                <input type="datetime-local" id="edit_start_time" v-model="editEventDetails.start_time"
+                                    required>
+                            </div>
+                            <div>
+                                <label for="edit_end_time">Fin:</label>
+                                <input type="datetime-local" id="edit_end_time" v-model="editEventDetails.end_time"
+                                    required>
+                            </div>
+
+                            <p v-if="dateErrorEdit" class="error-message">La fecha de inicio debe ser menor o igual que
+                                la
+                                fecha de fin.</p>
+                            <button type="submit" :disabled="dateErrorEdit">Actualizar</button>
+                        </form>
                     </div>
-
-
-                    <div v-if="selectedEventId === evento.id && showEmailInput" class="email-input-container"
-                        @click.stop>
-                        <div class="email-header">
-                            <h3>Agregar correos para el evento</h3>
-                            <button class="close-email-button" @click.stop="closeEmailInput">❌</button>
-                        </div>
-                        <div class="email-input">
-                            <input type="email" v-model="newEmail" placeholder="Escribe un correo y presiona Enter"
-                                @keyup.enter.stop="addEmail" />
-                            <ul>
-                                <li v-for="(email, index) in emailList" :key="index" class="li-sep">
-                                    {{ email }} <button @click.stop="removeEmail(index)" class="close-email-button"
-                                        style="font-size: 10px;">❌</button>
-                                </li>
-                            </ul>
-                            <button @click.stop="sendNotifications(evento.id)" class="send-button">Enviar
-                                notificaciones</button>
-                        </div>
-                    </div>
-
                 </div>
             </div>
-            <div class="create-event-container">
-                <button class="toggle-button" @click="toggleCreateEvent">+</button>
-                <div v-if="showCreateEvent" class="create-event">
-                    <div class="container-p">
-                        <h2>Crear Evento</h2>
-                        <button class="close-button" @click="closeForm">❌</button>
-                    </div>
 
-                    <form @submit.prevent="createEvent">
-                        <div>
-                            <label for="description">Descripción:</label>
-                            <input type="text" id="description" v-model="newEvent.description" required>
-                        </div>
-                        <div>
-                            <label for="start_time">Inicio:</label>
-                            <input type="datetime-local" id="start_time" v-model="newEvent.start_time" required>
-                        </div>
-                        <div>
-                            <label for="end_time">Fin:</label>
-                            <input type="datetime-local" id="end_time" v-model="newEvent.end_time" required>
-                        </div>
-                        <p v-if="dateError" class="error-message">La fecha de inicio debe ser menor o igual que la fecha
-                            de fin.</p>
-                        <button type="submit" :disabled="dateError">Crear</button>
-                    </form>
-                </div>
-                <div v-if="showEditEvent" class="edit-event">
-                    <h2 class="container-p">Editar Evento <button class="close-button" @click="closeForm">❌</button>
-                    </h2>
-
-                    <form @submit.prevent="updateEvent">
-                        <div>
-                            <label for="edit_description">Descripción:</label>
-                            <input type="text" id="edit_description" v-model="editEventDetails.description" required>
-                        </div>
-                        <div>
-                            <label for="edit_start_time">Inicio:</label>
-                            <input type="datetime-local" id="edit_start_time" v-model="editEventDetails.start_time"
-                                required>
-                        </div>
-                        <div>
-                            <label for="edit_end_time">Fin:</label>
-                            <input type="datetime-local" id="edit_end_time" v-model="editEventDetails.end_time"
-                                required>
-                        </div>
-                        
-                        <p v-if="dateErrorEdit" class="error-message">La fecha de inicio debe ser menor o igual que la
-                            fecha de fin.</p>
-                        <button type="submit" :disabled="dateErrorEdit">Actualizar</button>
-                    </form>
-                </div>
-            </div>
+            <button class="group-button" @click="goToGroup" >
+                Mis grupos
+            </button>
         </div>
     </div>
 </template>
@@ -117,11 +126,13 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useRouter } from '#imports';
 import axios from 'axios';
-import { EVENTS_USER, EVENTS, MEETINGS } from '~/public/config';
+import { EVENTS_USER, EVENTS, MEETINGS, GROUP_PAGE } from '~/public/config';
 const userName = ref('');
 
 const route = useRoute();
+const router = useRouter();
 const token = ref('');
 const eventos = ref([]);
 const newEvent = ref({
@@ -139,6 +150,11 @@ const editEventDetails = ref({
     end_time: '',
     state: 'pendiente'
 });
+
+const goToGroup = async () => {
+
+    await router.push({path: GROUP_PAGE, query: { token: token.value, name:  userName.value} })
+}
 
 const dateError = computed(() => {
     const start = new Date(newEvent.value.start_time);
@@ -347,7 +363,7 @@ onMounted(async () => {
     if (route.query.token) {
         token.value = route.query.token;
 
-        userName.value =  route.query.name;
+        userName.value = route.query.name;
 
         try {
             const response = await axios.get(EVENTS_USER, {
@@ -364,14 +380,21 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.container-all {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    width: 100%;
+    height: 95vh;
+    flex-direction: column
+}
 .container {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: start;
+    justify-content: space-between;
     width: 100%;
     height: 100%;
-    margin-left: 10px;
 }
 
 .new-page {
@@ -597,6 +620,17 @@ select {
     color: red;
     font-size: 14px;
     margin-top: 5px;
+}
+
+.group-button{
+    width: 8%;
+    height: 8%;
+    background-color: #ff00008a;
+    color: white;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 120%;
 }
 </style>
 

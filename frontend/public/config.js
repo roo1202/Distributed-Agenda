@@ -8,11 +8,13 @@ const EVENTS_USER = `${BASE_URL_API_V1}events/user/`;
 const EVENTS = `${BASE_URL_API_V1}events/`;
 const MEETINGS = `${BASE_URL_API_V1}meetings/user/`;
 const MEETING = `${BASE_URL_API_V1}meetings/`;
+const GROUPS = `${BASE_URL_API_V1}groups/`;
 
 
 const LOGIN_PAGE = `/`;
 const REGISTER_PAGE = `/auth/register`;
 const HOME_PAGE = '/init'
+const GROUP_PAGE = 'group'
 
 
 export {
@@ -27,5 +29,7 @@ export {
   EVENTS_USER,
   EVENTS,
   MEETINGS,
-  MEETING
+  MEETING,
+  GROUP_PAGE,
+  GROUPS
 };
