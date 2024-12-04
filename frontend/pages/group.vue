@@ -55,14 +55,14 @@
                 <button type="button" @click="quitarForm" class="btn btn-secondary">Cancelar</button>
             </div>
         </form>
-        <VisualizacionTemporal></VisualizacionTemporal>
+       
     </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import { GROUPS } from '~/public/config';
+import { GROUPS, USERS_ENDPOINT } from '~/public/config';
 
 const token = ref('');
 const name = ref('');
@@ -121,7 +121,6 @@ const deleteGroup = async (groupId) => {
 };
 
 const getUsuarios = async (idGrupo) => {
-    return [];
     axios.get(GROUPS + idGrupo + '/users', {
         headers: { Authorization: `Bearer ${token.value}` },
     })
@@ -151,10 +150,10 @@ const quitarForm = () => {
 
 onMounted(async () => {
     try {
-        const response = await axios.get(GROUPS, {
+        const response = await axios.get(USERS_ENDPOINT + '/groups', {
             headers: { Authorization: `Bearer ${token.value}` },
         });
-        console.log(response.data)
+        console.log(response)
 
         groups.value = await Promise.all(response.data.map(group => ({ ...group, members: getUsuarios(group.id) })));
 
