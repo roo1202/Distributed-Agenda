@@ -130,7 +130,7 @@ def get_invited_groups(db: Session, user_id: int):
     result = db.execute(
         select([association_table.c.group_id])
         .where(association_table.c.user_id == user_id)
-        .where(association_table.c.hierarchy_level == -1)
+        .where(association_table.c.hierarchy_level < 0)
     ).fetchall()
     if result:
         return [row[0] for row in result]
