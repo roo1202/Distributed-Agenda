@@ -161,13 +161,13 @@ def accept_group_invitation_endpoint(group_id: int, db: Session = Depends(get_db
     
     
 # Crear un nuevo grupo
-@router.post("/groups/{hierarchy}", response_model=GroupResponse)
+@router.post("/groups/hierarchy/{hierarchy}", response_model=GroupResponse)
 def create_group_endpoint(group: GroupCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user), hierarchy:int = 0):
     group = create_group(db, group)
     return add_user_to_group(db, user.id, group.id, hierarchy)
 
 # Obtener un grupo por su ID
-@router.get("/groups/{group_id}", response_model=GroupResponse)
+@router.get("/groups/group_id/{group_id}", response_model=GroupResponse)
 def get_group_by_id_endpoint(group_id: int, db: Session = Depends(get_db)):
     group = get_group_by_id(db, group_id)
     if group is None:
@@ -180,7 +180,7 @@ def get_groups_endpoint(db: Session = Depends(get_db)):
     return get_groups(db)
 
 # Actualizar un grupo
-@router.put("/groups/{group_id}", response_model=GroupResponse)
+@router.put("/groups/group_id/{group_id}", response_model=GroupResponse)
 def update_group_endpoint(group_id: int, group_update: GroupUpdate, db: Session = Depends(get_db)):
     group = update_group(db, group_id, group_update)
     if group is None:
@@ -188,7 +188,7 @@ def update_group_endpoint(group_id: int, group_update: GroupUpdate, db: Session 
     return group
 
 # Eliminar un grupo
-@router.delete("/groups/{group_id}", response_model=GroupResponse)
+@router.delete("/groups/group_id/{group_id}", response_model=GroupResponse)
 def delete_group_endpoint(group_id: int, db: Session = Depends(get_db)):
     group = delete_group(db, group_id)
     if group is None:
@@ -215,11 +215,9 @@ def remove_user_from_group_endpoint(group_id: int, db: Session = Depends(get_db)
     return group
 
 # Obtener todos los grupos de un usuario
-@router.get("/users/groups", response_model=List[GroupResponse])
+@router.get("/groups/users", response_model=List[GroupResponse])
 def get_user_groups_endpoint(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     groups = get_user_groups(db, user.id)
-    if not groups:
-        raise HTTPException(status_code=404, detail="User not found or no groups")
     return groups
 
 # Obtener todos los usuarios que pertenecen a un grupo
