@@ -307,7 +307,7 @@ const sendNotifications = async (eventId) => {
         showEmailInput.value = false;
     } catch (error) {
         console.error(error);
-        alert("Hubo un error al enviar las notificaciones.");
+        alert("Hubo un error al enviar las notificaciones. \n" + error.response.data.detail);
     }
 };
 

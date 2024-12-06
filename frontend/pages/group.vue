@@ -17,15 +17,19 @@
                 <div v-if="activeGroup === group.id" class="grupo-details">
                     <h4>Integrantes:</h4>
                     <ul>
-                        <li v-for="member in group.members" :key="member.id" class="member-item">
-                            {{ member.name }}
+                        <li v-for="member in usuarios" :key="member.id" class="member-item">
+                            {{ member }}
                             <button @click="removeUser(group.id, member.id)"
                                 class="btn btn-sm btn-danger">Eliminar</button>
                         </li>
                     </ul>
                     <form @submit.prevent="addUser(group.id)" class="add-user-form">
-                        <input type="text" v-model="newUserName" placeholder="Nombre del usuario" required
+                        <input type="text" v-model="newUserEmail" placeholder="Email del usuario" required
                             class="input" />
+                            <template v-if="group.hierarchy">
+                                <input  type="number" v-model="newUserHierarchy" placeholder="Heraquia del usuario" required
+                                    min="0" class="input" />
+                            </template>
                         <button type="submit" class="btn btn-sm">Agregar usuario</button>
                     </form>
                 </div>
@@ -55,7 +59,7 @@
                 <button type="button" @click="quitarForm" class="btn btn-secondary">Cancelar</button>
             </div>
         </form>
-       
+
     </div>
 </template>
 
@@ -68,7 +72,11 @@ const token = ref('');
 const name = ref('');
 const groups = ref([]);
 const activeGroup = ref(null); // Para controlar el grupo activo
-const newUserName = ref(''); // Para almacenar el nombre del nuevo usuario
+const newUserEmail = ref(''); // Para almacenar el nombre del nuevo usuario
+const newUserHierarchy = ref('');
+const route = useRoute();
+const router = useRouter();
+const usuarios = ref([]);
 
 const group = ref({
     name: '',
@@ -78,20 +86,21 @@ const group = ref({
 const hasHierarchy = ref(false);
 const showForm = ref(false);
 
-const toggleMembers = (groupId) => {
+const toggleMembers = async (groupId) => {
     activeGroup.value = activeGroup.value === groupId ? null : groupId;
+    usuarios.value = await getUsuarios(groupId);
 };
 
 const addUser = async (groupId) => {
-    if (!newUserName.value.trim()) return;
+    if (!newUserEmail.value.trim()) return;
 
     try {
-        await axios.post(`/api/groups/${groupId}/users`, { name: newUserName.value }, {
-            headers: { Authorization: `Bearer ${token.value}` },
+        await axios.post(`${GROUPS}${groupId}/users/${newUserEmail.value}/level/${newUserHierarchy.value}`, {
+            headers: { 'Authorization': `Bearer ${token.value}` },
         });
-        const group = groups.value.find(g => g.id === groupId);
-        group.members.push({ id: Date.now(), name: newUserName.value });
-        newUserName.value = '';
+
+        newUserEmail.value = '';
+        newUserHierarchy.value = '';
     } catch (err) {
         console.error(err);
     }
@@ -99,8 +108,8 @@ const addUser = async (groupId) => {
 
 const removeUser = async (groupId, userEmail, hierarchy) => {
     try {
-        await axios.delete(`${GROUPS}/${groupId}/users/${userEmail}/level/${hierarchy}`, {
-            headers: { Authorization: `Bearer ${token.value}` },
+        await axios.delete(`${GROUPS}/${groupId}/user/${userEmail}/level/${hierarchy}`, {
+            headers: { 'Authorization': `Bearer ${token.value}` },
         });
         const group = groups.value.find(g => g.id === groupId);
         group.members = group.members.filter(member => member.id !== userEmail);
@@ -111,8 +120,8 @@ const removeUser = async (groupId, userEmail, hierarchy) => {
 
 const deleteGroup = async (groupId) => {
     try {
-        await axios.delete(GROUPS + groupId, {
-            headers: { Authorization: `Bearer ${token.value}` },
+        await axios.delete(GROUPS + 'group_id/' + groupId, {
+            headers: { 'Authorization': `Bearer ${token.value}` },
         });
         groups.value = groups.value.filter(group => group.id !== groupId);
     } catch (err) {
@@ -121,20 +130,22 @@ const deleteGroup = async (groupId) => {
 };
 
 const getUsuarios = async (idGrupo) => {
-    axios.get(GROUPS + idGrupo + '/users', {
-        headers: { Authorization: `Bearer ${token.value}` },
-    })
+    
+    const response = await axios.get(GROUPS + idGrupo + '/users', {
+        headers: { 'Authorization': `Bearer ${token.value}` },
+    });
+    return response.data;
 }
 
 const createGroup = async () => {
     try {
-        const response = await axios.post(GROUPS + group.value.hierarchy, {
+        const response = await axios.post(GROUPS + 'hierarchy/' + group.value.hierarchy, {
             name: group.value.name,
             hierarchy: (group.value.name !== 0)
         }, {
-            headers: { Authorization: `Bearer ${token.value}` },
+            headers: { 'Authorization': `Bearer ${token.value}` },
         });
-        groups.value.push({ ...response.data, members: await getUsuarios(response.data.id) });
+        groups.value.push(response.data);
         quitarForm();
     } catch (err) {
         console.error(err);
@@ -149,15 +160,17 @@ const quitarForm = () => {
 };
 
 onMounted(async () => {
+    token.value = route.query.token;
+
+    name.value = route.query.name;
+
     try {
-        const response = await axios.get(USERS_ENDPOINT + '/groups', {
-            headers: { Authorization: `Bearer ${token.value}` },
+        const response = await axios.get(GROUPS + 'users', {
+            headers: { 'Authorization': `Bearer ${token.value}` },
         });
-        console.log(response)
 
-        groups.value = await Promise.all(response.data.map(group => ({ ...group, members: getUsuarios(group.id) })));
+        groups.value = response.data;
 
-        console.log(groups.value);
     } catch (err) {
         console.error(err);
     }

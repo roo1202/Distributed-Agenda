@@ -22,7 +22,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import { MEETINGS, MEETING } from '~/public/config';
+import { MEETINGS, MEETING, GROUPS_INVITATIONS } from '~/public/config';
 
 const notifications = ref([]);
 const isVisible = ref(true);
@@ -46,6 +46,18 @@ onMounted(async () => {
         });
         notifications.value = response.data.filter(meeting => meeting.state === 'pending');
     } catch (err) {
+        console.error(err);
+    }
+
+    try{
+        const response = await axios.get(GROUPS_INVITATIONS, {
+            headers: {
+                'Authorization': `Bearer ${props.token}`
+            }
+        });
+        console.log(response.data);
+    }
+    catch(err){
         console.error(err);
     }
 });
