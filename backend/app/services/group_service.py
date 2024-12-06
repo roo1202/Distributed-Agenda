@@ -13,7 +13,7 @@ def add_user_to_group(db: Session, user_id: int, group_id: int, hierarchy_level:
     user = db.query(User).filter(User.id == user_id).first()
     group = db.query(Group).filter(Group.id == group_id).first()
     if user and group:
-        stmt = insert(association_table).values(group_id=group_id, user_id=user_id, hierarchy_level=(-1)*hierarchy_level)
+        stmt = insert(association_table).values(group_id=group_id, user_id=user_id, hierarchy_level=hierarchy_level + 1000)
         db.execute(stmt)
         db.commit()
     return group
@@ -41,7 +41,7 @@ def get_users_in_group(db: Session, group_id: int):
             .where(association_table.c.group_id == group_id)
         ).fetchone()
         
-        if hierarchy_level and hierarchy_level[0] >= 0:
+        if hierarchy_level and hierarchy_level[0] < 1000:
             user_emails.append(user.email)
     
     
@@ -138,7 +138,7 @@ def get_invited_groups(db: Session, user_id: int):
     result = db.execute(
         select(association_table.c.group_id)
         .where(association_table.c.user_id == user_id)
-        .where(association_table.c.hierarchy_level < 0)
+        .where(association_table.c.hierarchy_level >= 1000)
     ).fetchall()
     if result:
         return [row[0] for row in result]
