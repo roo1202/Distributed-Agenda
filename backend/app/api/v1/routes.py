@@ -155,7 +155,7 @@ def update_hierarchy_level_endpoint(group_id: int, user_id: int, hierarchy: int,
 def accept_group_invitation_endpoint(group_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     user_hierarchy = get_hierarchy_level(db, user.id, group_id)
     if user_hierarchy < 0:
-        return update_hierarchy_level(db, user.id, group_id, user_hierarchy * -1)
+        return update_hierarchy_level(db, user.id, group_id, user_hierarchy - 1000)
     else:
         raise HTTPException(status_code=404, detail="Failed acceptance")
     
