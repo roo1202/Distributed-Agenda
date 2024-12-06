@@ -201,16 +201,21 @@ def add_user_to_group_endpoint(group_id: int, hierarchy: int, user_email:str, db
     groups = [group.id for group in get_user_groups(db, user.id)]
     if group_id in groups:
         user_id = get_user_by_email(db, user_email).id
+        if not user_id:
+            raise HTTPException(status_code=404, detail="The user you are trying to add does not exist.")
         group = add_user_to_group(db, user_id, group_id, hierarchy)
     else:
         raise HTTPException(status_code=404, detail="You do not have permission to add a user to this group.")
     return group
 
 # Eliminar un usuario de un grupo
-@router.delete("/groups/{group_id}/user/", response_model=GroupResponse)
-def remove_user_from_group_endpoint(group_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    group = remove_user_from_group(db, user.id, group_id)
-    if group is None:
+@router.delete("/groups/{group_id}/users/{user_email}", response_model=GroupResponse)
+def remove_user_from_group_endpoint(user_email : str, group_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    groups = [group.id for group in get_user_groups(db, user.id)]
+    user_to_remove = get_user_by_email(db, user_email)
+    if group_id in groups and user_to_remove and get_hierarchy_level(db, user_to_remove.id, group_id) < get_hierarchy_level(db, user.id, group_id):
+        group = remove_user_from_group(db, user_to_remove.id, group_id)
+    if group is None or user_to_remove is None:
         raise HTTPException(status_code=404, detail="Group or User not found")
     return group
 
