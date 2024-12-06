@@ -26,10 +26,10 @@
                     <form @submit.prevent="addUser(group.id)" class="add-user-form">
                         <input type="text" v-model="newUserEmail" placeholder="Email del usuario" required
                             class="input" />
-                            <template v-if="group.hierarchy">
-                                <input  type="number" v-model="newUserHierarchy" placeholder="Heraquia del usuario" required
-                                    min="0" class="input" />
-                            </template>
+                        <template v-if="group.hierarchy">
+                            <input type="number" v-model="newUserHierarchy" placeholder="Heraquia del usuario" required
+                                min="0" class="input" />
+                        </template>
                         <button type="submit" class="btn btn-sm">Agregar usuario</button>
                     </form>
                 </div>
@@ -95,12 +95,14 @@ const addUser = async (groupId) => {
     if (!newUserEmail.value.trim()) return;
 
     try {
-        await axios.post(`${GROUPS}${groupId}/users/${newUserEmail.value}/level/${newUserHierarchy.value}`, {
+        const response = await axios.post(`${GROUPS}${groupId}/users/${newUserEmail.value}/level/${newUserHierarchy.value}`, {
             headers: { 'Authorization': `Bearer ${token.value}` },
         });
 
         newUserEmail.value = '';
         newUserHierarchy.value = '';
+        alert('Usuario agregado con exito')
+        console.log(response);
     } catch (err) {
         console.error(err);
     }
@@ -130,11 +132,16 @@ const deleteGroup = async (groupId) => {
 };
 
 const getUsuarios = async (idGrupo) => {
-    
-    const response = await axios.get(GROUPS + idGrupo + '/users', {
-        headers: { 'Authorization': `Bearer ${token.value}` },
-    });
-    return response.data;
+    try {
+        const response = await axios.get(GROUPS + idGrupo + '/users', {
+            headers: { 'Authorization': `Bearer ${token.value}` },
+        });
+        return response.data;
+    }
+    catch (err) {
+        console.error(err);
+    }
+    return [];
 }
 
 const createGroup = async () => {
