@@ -164,7 +164,7 @@ def accept_group_invitation_endpoint(group_id: int, db: Session = Depends(get_db
 @router.post("/groups/hierarchy/{hierarchy}", response_model=GroupResponse)
 def create_group_endpoint(group: GroupCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user), hierarchy:int = 0):
     group = create_group(db, group)
-    return add_user_to_group(db, user.id, group.id, hierarchy)
+    return add_user_to_group(db, user.id, group.id, hierarchy - 1000)
 
 # Obtener un grupo por su ID
 @router.get("/groups/group_id/{group_id}", response_model=GroupResponse)
@@ -200,10 +200,13 @@ def delete_group_endpoint(group_id: int, db: Session = Depends(get_db)):
 def add_user_to_group_endpoint(group_id: int, hierarchy: int, user_email:str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     groups = [group.id for group in get_user_groups(db, user.id)]
     if group_id in groups:
-        user_id = get_user_by_email(db, user_email).id
-        if not user_id:
+        user = get_user_by_email(db, user_email)
+        if not user:
             raise HTTPException(status_code=404, detail="The user you are trying to add does not exist.")
-        group = add_user_to_group(db, user_id, group_id, hierarchy)
+       # user_id = get_user_by_email(db, user_email).id
+       # if not user_id:
+       #     raise HTTPException(status_code=404, detail="The user you are trying to add does not exist.")
+        group = add_user_to_group(db, user.id, group_id, hierarchy)
     else:
         raise HTTPException(status_code=404, detail="You do not have permission to add a user to this group.")
     return group

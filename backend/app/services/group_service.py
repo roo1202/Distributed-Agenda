@@ -34,14 +34,15 @@ def get_users_in_group(db: Session, group_id: int):
         return []
     
     user_emails = []
+
     for user in group.users:
         hierarchy_level = db.execute(
             select(association_table.c.hierarchy_level)
             .where(association_table.c.user_id == user.id)
             .where(association_table.c.group_id == group_id)
         ).fetchone()
-        
-        if hierarchy_level and hierarchy_level[0] < 1000:
+       
+        if hierarchy_level is not None and hierarchy_level[0] < 1000:
             user_emails.append(user.email)
     
     

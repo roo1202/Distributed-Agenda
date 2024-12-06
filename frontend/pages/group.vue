@@ -19,7 +19,7 @@
                     <ul>
                         <li v-for="member in usuarios" :key="member.id" class="member-item">
                             {{ member }}
-                            <button @click="removeUser(group.id, member.id)"
+                            <button @click="removeUser(group.id, member)"
                                 class="btn btn-sm btn-danger">Eliminar</button>
                         </li>
                     </ul>
@@ -95,7 +95,7 @@ const addUser = async (groupId) => {
     if (!newUserEmail.value.trim()) return;
 
     try {
-        const response = await axios.post(`${GROUPS}${groupId}/users/${newUserEmail.value}/level/${newUserHierarchy.value}`, {
+        const response = await axios.post(`${GROUPS}${groupId}/users/${newUserEmail.value}/level/${newUserHierarchy.value}`,{}, {
             headers: { 'Authorization': `Bearer ${token.value}` },
         });
 
@@ -104,13 +104,14 @@ const addUser = async (groupId) => {
         alert('Usuario agregado con exito')
         console.log(response);
     } catch (err) {
-        console.error(err);
+        console.error(err.response);
+        alert('Error al agregar usuario, no existe')
     }
 };
 
-const removeUser = async (groupId, userEmail, hierarchy) => {
+const removeUser = async (groupId, userEmail) => {
     try {
-        await axios.delete(`${GROUPS}/${groupId}/user/${userEmail}/level/${hierarchy}`, {
+        await axios.delete(`${GROUPS}/${groupId}/users/${userEmail}`, {
             headers: { 'Authorization': `Bearer ${token.value}` },
         });
         const group = groups.value.find(g => g.id === groupId);
@@ -122,9 +123,10 @@ const removeUser = async (groupId, userEmail, hierarchy) => {
 
 const deleteGroup = async (groupId) => {
     try {
-        await axios.delete(GROUPS + 'group_id/' + groupId, {
+        const response = await axios.delete(GROUPS + 'group_id/' + groupId, {
             headers: { 'Authorization': `Bearer ${token.value}` },
         });
+        console.log(response);
         groups.value = groups.value.filter(group => group.id !== groupId);
     } catch (err) {
         console.error(err);
@@ -133,9 +135,10 @@ const deleteGroup = async (groupId) => {
 
 const getUsuarios = async (idGrupo) => {
     try {
-        const response = await axios.get(GROUPS + idGrupo + '/users', {
+        const response = await axios.get(GROUPS + idGrupo + '/users',{
             headers: { 'Authorization': `Bearer ${token.value}` },
         });
+        console.log(response.data)
         return response.data;
     }
     catch (err) {
@@ -177,7 +180,6 @@ onMounted(async () => {
         });
 
         groups.value = response.data;
-
     } catch (err) {
         console.error(err);
     }
