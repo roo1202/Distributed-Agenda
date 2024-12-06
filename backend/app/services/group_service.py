@@ -13,7 +13,7 @@ def add_user_to_group(db: Session, user_id: int, group_id: int, hierarchy_level:
     user = db.query(User).filter(User.id == user_id).first()
     group = db.query(Group).filter(Group.id == group_id).first()
     if user and group:
-        stmt = insert(association_table).values(group_id=group_id, user_id=user_id, hierarchy_level=hierarchy_level)
+        stmt = insert(association_table).values(group_id=group_id, user_id=user_id, hierarchy_level=(-1)*hierarchy_level)
         db.execute(stmt)
         db.commit()
     return group
@@ -35,7 +35,15 @@ def get_users_in_group(db: Session, group_id: int):
     
     user_emails = []
     for user in group.users:
-        user_emails.append(user.email)
+        hierarchy_level = db.execute(
+            select(association_table.c.hierarchy_level)
+            .where(association_table.c.user_id == user.id)
+            .where(association_table.c.group_id == group_id)
+        ).fetchone()
+        
+        if hierarchy_level and hierarchy_level[0] >= 0:
+            user_emails.append(user.email)
+    
     
     return user_emails
 
@@ -128,7 +136,7 @@ def get_hierarchy_level(db: Session, user_id: int, group_id: int) -> int:
 # Servicio para obtener los grupos a los que se me esta invitando
 def get_invited_groups(db: Session, user_id: int):
     result = db.execute(
-        select([association_table.c.group_id])
+        select(association_table.c.group_id)
         .where(association_table.c.user_id == user_id)
         .where(association_table.c.hierarchy_level < 0)
     ).fetchall()
