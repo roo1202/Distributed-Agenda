@@ -250,7 +250,8 @@ def create_group_meeting_endpoint(group_id: int, meeting: MeetingCreate, db: Ses
 @router.get("/groups/users/invited_groups", response_model=List[GroupResponse])
 def get_invited_groups_endpoint(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     group_ids = get_invited_groups(db, user.id)
-    if group_ids.len == 0:
-        return []
-    groups = db.query(Group).filter(Group.id.in_(group_ids)).all()
+    if group_ids :
+        groups = db.query(Group).filter(Group.id.in_(group_ids)).all()
+    else:
+        groups = []
     return groups
