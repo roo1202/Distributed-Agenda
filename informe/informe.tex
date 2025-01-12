@@ -1,0 +1,84 @@
+\documentclass[11pt,a4paper]{article} 
+\usepackage[spanish]{babel} 
+\usepackage{amsmath}
+
+\title{Informe} 
+\author{Roger Fuentes Rodr\'iguez \\
+        Kevin Manzano Rodr\'iguez} 
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\section{Arquitectura} 
+
+\subsection{Organizaci\'on del sistema distribuido}
+
+Implementaremos una arquitectura de microservicio, con los principales servicios: Autenticaci\'on (gesti\'on de usuarios, autenticaci\'on e identificaci\'on), Grupos (gesti\'on de los grupos de los usuarios, incluyendo roles y jerarquias), Agendas (gesti\'on de eventos y reuniones), Notificaciones (envio de notificaciones en tiempo real a los usuarios), Base de datos Distribuidas (almacena la informaci\'on).
+
+\subsection{Distribuci\'on de servicios en ambas redes Docker}
+
+Tendremos dos redes de Docker separadas, Cliente (frontend) y Servidor (Backend y Base de Datos), el Servidor alberga los servicios anteriormente mencionados.
+
+\section{Procesos} 
+
+\subsection{Tipos}
+    \begin{enumerate}
+        \item Autenticaci\'on.
+        \begin{enumerate}
+            \item Gesti\'on de usuarios.
+            \item Autenticaci\'on y Autorizaci\'on.
+        \end{enumerate} 
+        \item Grupos.
+        \begin{enumerate}
+            \item Gesti\'on de grupos.
+        \end{enumerate} 
+        \item Agenda.
+        \begin{enumerate}
+            \item Gesti\'on de agenda y reuniones.
+        \end{enumerate} 
+        \item Notificaciones.
+        \begin{enumerate}
+            \item envio de notificaciones en tiempo real.
+        \end{enumerate} 
+        \item Base de datos.
+        \begin{enumerate}
+            \item Gesti\'on de datos.
+        \end{enumerate} 
+    \end{enumerate}
+\subsection{Organizaci\'on en una instancia}
+
+Los procesos estar\'an en instancias separadas para cada microservicio, cada servicio tiene su propia instancia de contenedor Docker.
+
+\subsection{Tipo de patr\'on de diseño}
+
+El sistema utilizar\'a Async, para los llamados HTTP, y para optimizar el envio de notificaciones Hilos para enviar las notificaciones de forma paralela.
+
+\section{Comunicaci\'on} 
+
+Tendremos comunicaci\'on cliente-servidor a trav\'es de APIs RESTful, entre servidores utilizaremos ZMQ y entre procesos RPC.
+
+\section{Coordinaci\'on}
+
+Para la coordinaci\'on entre servidores utilizaremos PUB-SUB que nos brinda ZMQ y para el acceso exclusivo a recursos emplearemos locks. Con respecto a la toma de decisiones implementaremos un algoritmo de consenso de quorum.
+
+\section{Nombrado y Localizaci\'on} 
+
+Utilizaremos CHORD como vimos en clases, tendremos un anillo de tamaño $2^m$ y asignaremos los recursos a una clave utilizando la funci\'on de hash SHA-256, y en el momento de acceder a un recurso utilizaremos las fingers-tables almacenadas en los nodos.
+
+\section{Consistencia y Replicaci\'on}
+
+Dado que utilizaremos CHORD en la secci\'on anterior, para garantizar nivel 2 de tolerancia a fallos implementaremos replicaci\'on m\'ultiple (K-R\'eplicas) para distribuir las copias de los datos entre varios nodos (ej consecutivos) y una consistencia eventual combinado con reparaci\'on autom\'atica de r\'eplicas.
+
+\section{Tolerancia a fallas}
+
+Utilizaremos mecanismos de health checks a los nodos vecinos de manera peri\'odica para verificar si est\'an activo. En caso de que un nodo falle se asegura que las claves asignadas a ese nodo sean r\'apidamente reasignadas (mecanismos de replicaci\'on). Para la recuperaci\'on de datos, las replicas almacenadas en otros nodos sincronizan su informaci\'on una vez que el nodo se recupere.
+
+\section{Seguridad}
+
+En el transito tendremos TLS, para cifrar la comunicaci\'on entre los nodos del CHORD. Los nodos necesitan ser capaces de verificar la autenticidad de otros nodos para eso implementaremos una Autenticaci\'on basada en certificados. Para la Autenticaci\'on de los usuarios usamos JWT
+
+\end{document} $
