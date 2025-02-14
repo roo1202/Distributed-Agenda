@@ -7,7 +7,9 @@ from alembic import context
 
 from app.db.base import Base  # Asegúrate de que la ruta sea correcta
 from app.models.user import User  # Importa tus modelos
+from app.models.notification import Notification
 from app.models.group import Group  # Importa tus modelos
+from app.models.group_user_association import association_table
 from app.models.meeting import Meeting  # Importa tus modelos
 from app.models.event import Event  # Importa tus modelos
 

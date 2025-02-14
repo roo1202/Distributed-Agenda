@@ -8,6 +8,7 @@ class Group(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     hierarchy = Column(Boolean)
+    creator = Column(Integer, nullable=False)
     users = relationship("User", secondary=association_table, back_populates="groups")
 
 
