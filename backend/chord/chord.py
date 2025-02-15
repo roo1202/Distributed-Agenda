@@ -1,8 +1,11 @@
 
 import hashlib
 import json
+import os
 import socket
 import threading
+import time
+import zipfile
 from backend.app.models.db_model import DBModel, notify_data
 
 def hash_key(key: str) -> int:
@@ -25,6 +28,78 @@ class Address():
     def __repr__(self):
         return f"ip:{self.ip} ports:{self.ports}"
     
+
+def send_request(address,data=None,answer_requiered=False,expected_zip_file=False,num_bytes=1024):     
+            sender = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try : sender.connect(address)
+            except ConnectionRefusedError as e :
+                sender.close()
+                return None
+                #print("Error de conexion :", e)
+                
+            # establecer un tiempo de espera de 10 segundos
+            sender.settimeout(10)
+            if data:
+                json_data = json.dumps(data).encode('utf-8')
+                sender.send(json_data)
+            else: send_copy_db(sender,num_bytes)
+
+            if answer_requiered:
+              try:
+                # Esperar la llegada de un mensaje
+                
+                if not expected_zip_file:
+                  data = sender.recv(num_bytes)
+                  data = data.decode('utf-8')
+                  data = json.loads(data) 
+                  sender.close()
+                else:
+                    data = recieve_copy_db(sender,num_bytes)
+              except socket.timeout:
+                # Manejar la excepción si se agotó el tiempo de espera
+                if not expected_zip_file or not data: notify_data("Tiempo de espera agotado para recibir un mensaje","Error")
+            sender.close()
+            return data 
+
+def send_copy_db(conn,num_bytes = 1024):
+        f = open ("copia.db", "rb")
+        l = f.read(num_bytes)
+        while (l):
+            conn.send(l)
+            l = f.read(num_bytes)
+        os.remove("copia.db")
+
+def recieve_copy_db(conn,num_bytes = 1024):
+    data= False
+    f = open("copia.db",'wb') #open in binary     
+    # receive data and write it to file
+    l = conn.recv(num_bytes)                  
+    while (l):
+          data = True
+          f.write(l)
+          l = conn.recv(num_bytes)
+    f.close()
+    return data
+
+
+def convert_into_int(bytes_seq):
+    # decodifica los bytes en un entero con orden de byte 'big'
+    return int.from_bytes(bytes_seq, byteorder='big')
+
+def create_zip(zip_name,files_names):
+    # Crea un archivo ZIP llamado "datos.zip"
+    with zipfile.ZipFile(zip_name , "w") as mi_zip:
+    # Agrega subarchivos al archivo ZIP
+        for file in files_names:
+          mi_zip.write(file)
+
+def create_json_file(data,file_name):
+    json_data = json.dumps(data)
+
+    # Escribe la cadena JSON en un archivo llamado "datos.json"
+    with open(file_name, "w") as f:
+      f.write(json_data)
+
 
 class ChordNode:
 
@@ -186,3 +261,115 @@ class ChordNode:
                     notify_data(f'Sending CHECK_SUC_RESP request to {id}',"Check")
                     json_data = json.dumps(data).encode('utf-8')
                     conn.send(json_data)
+
+
+    def get_discover_request(self):
+        while True:
+            
+            conn, addr = self.discover.accept()
+            # conn es otro socket que representa la conexion 
+            msg=conn.recv(1024)
+            msg = msg.decode('utf-8')
+            msg = json.loads(msg) 
+            
+            request = msg["message"]
+    
+            # I have a new predeccesor (sucessor)
+            if request == MOV_DATA_REQ or request == REP_DATA_REQ:
+                get_data =  request == MOV_DATA_REQ
+                action = "MOV_DATA_REQ" if get_data else "REP_DATA_REQ"
+                response =   "MOV_DATA_REP" if get_data else "REP_DATA_REP"
+                node = msg["nodeID"]
+                notify_data(f"Receiving {action} from {node}","GetData")
+                self.index_data(get_data,msg)
+                send_copy_db(conn,num_bytes=5120)
+                notify_data(f"Sending {response} to {node}","GetData")
+                if not get_data: 
+                    self.Sucessor= msg["nodeID"]
+                    self.node_address[self.Sucessor] = Address(msg["ip"],msg["port"])
+                elif msg["del_rep"]: self.delete_rep_data(msg)  
+
+            if request == GET_NODES:
+                id = msg["nodeID"]
+                notify_data(f'Recieving GET_NODES request from {id}',"GetData")
+                addresses = self.Serialize_Address
+                data = {"message": SET_NODES,"ip": self.address.ip , "ports": self.address.ports , "nodeID": self.nodeID, "nodeSet":self.nodeSet, "addresses":addresses}
+                data = json.dumps(data).encode('utf-8')
+                conn.send(data)
+
+            if request == SET_LEADER:
+                id = msg["nodeID"]
+                notify_data(f'Recieving SET_LEADER request from {id}',"Check")
+                addresses,self.nodeSet = self.discover_nodes(True)
+                self.node_address = self.get_addresses(addresses) 
+                self.recomputeFingerTable(write_to_new_suc = True)       
+
+            if request == DEL_REP_DATA:
+                id = msg["nodeID"]
+                notify_data(f"Receiving DEL_REP_DATA from {id}",'database')
+                self.delete_rep_data(msg)
+
+    def index_data(self,get_data,msg=None):
+        start_index = self.Predecessor
+        if msg:  start_index = msg["pred_pred"] if not get_data else msg["startID"]
+        end_index =   self.nodeID  if not get_data else msg["nodeID"] 
+        print(start_index,end_index)
+        condition = lambda id : self.inbetween(int(id),start_index,end_index)
+        self.db.get_filtered_db(condition,'copia.db')
+
+    def delete_rep_data(self,msg):
+        start_index = msg["pred_pred"]
+        end_index =  msg["startID"]
+        print(start_index,end_index)
+        condition = lambda id : self.inbetween(int(id),start_index,end_index)
+        self.db.delete_replicated_db(condition)
+
+    def recieve_files(self):
+        while True:          
+            conn, addr = self.file_receiver.accept()
+            notify_data(f"Receiving file from {addr}",'database')
+            recieve_copy_db(conn,5120)
+            self.db.replicate_db('copia.db')
+            notify_data(f"Replicating data","database")
+            self.db.check_db()
+            os.remove('copia.db')
+
+    def get_nodes(self):           
+            data = {"message": GET_NODES, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID}
+            leader_address = self.node_address[self.leader] 
+            data = send_request((leader_address.ip,int(leader_address.ports[1])),data=data,answer_requiered=True)
+            if data:
+              if data["message"] == SET_NODES:
+                self.nodeSet = data["nodeSet"]
+                notify_data(f"Upadating node set :{self.nodeSet}","GetData")
+                self.node_address = self.get_addresses(data["addresses"])
+                print(self.node_address)
+                self.recomputeFingerTable(write_to_new_suc = True)
+              else:
+                msg = data["message"]
+                notify_data(f"Not expected {msg} !!!!!!!!!!!!!!!!","Error")
+            else:
+                addresses,self.nodeSet = self.discover_nodes(True)
+                #building node_address dict
+                self.node_address = self.get_addresses(addresses)       
+                #Computing Finger Table
+                self.recomputeFingerTable(write_to_new_suc = True)
+
+    def check_sucessor(self):
+        while True:
+          time.sleep(20)
+          if not self.Sucessor == self.nodeID:
+            data = {"message": CHECK_SUC, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
+            address = (self.node_address[self.Sucessor].ip,int(self.node_address[self.Sucessor].ports[3]))
+            notify_data(f"Sending CHECK_SUC to {self.Sucessor}","Check")
+            data = send_request(address,data=data,answer_requiered=True)
+            notify_data(f'Recieving CHECK_SUC_RESP' ,"Check")
+            if not data:
+                if not self.leader == self.nodeID: self.get_nodes()  
+        
+    def send_data_to_sucessor(self):
+        notify_data(f"New sucessor found {self.Sucessor}","Join")
+        address = (self.node_address[self.Sucessor].ip,int(self.node_address[self.Sucessor].ports[2]))
+        self.index_data(False)
+        send_request(address,num_bytes=5120)
+        notify_data(f"Sending REP_DATA to {self.Sucessor}","GetData")       
