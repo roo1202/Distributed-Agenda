@@ -373,3 +373,199 @@ class ChordNode:
         self.index_data(False)
         send_request(address,num_bytes=5120)
         notify_data(f"Sending REP_DATA to {self.Sucessor}","GetData")       
+        
+
+    def run(self):
+        #Receiving requests
+        while True:
+            print("next_step")
+            
+            print(f"My address: {str(self.address)}")
+            conn, addr = self.receiver.accept()
+            msg=conn.recv(1024)
+            msg = msg.decode('utf-8')
+            data = json.loads(msg) 
+
+            #unpacking data
+            request = data["message"]
+           
+            if request == STOP: 
+                break
+            elif request in self.Req_Method.keys():
+                notify_data(f"Receiving {request} from {addr}","SetData")
+                if 30 <= int(request) < 60:
+                    if not self.leader == self.nodeID: self.get_nodes()   
+                    if int(request)%2 ==0 :self.update_key(data,request,addr)
+                    else: 
+                        self.Req_Method[request](data)
+                        self.db.check_db()
+                if 60 <= int(request) < 80:
+                   if not self.leader == self.nodeID: self.get_nodes()
+                   self.get_key(data,request)
+
+       
+            
+    def lookup_key(self,data):
+                key = data["key"]
+                ip = data["ip"]
+                port = data["port"]
+            
+                notify_data(f"Receiving LOOKUP_REQ of {key} key","GetData")
+                #print(self.FT)
+                nextID = self.localSuccNode(key)          # look up next node #-
+                
+                if not nextID == self.nodeID :
+                    #notify_data(f"Connecting to {nextID}","GetData")
+                    data = {"message": LOOKUP_REQ, "ip": ip , "port": port, "key": key} # send to succ
+                    send_request((self.node_address[nextID].ip,int(self.node_address[nextID].ports[0])),data=data)
+                    notify_data(f"Sending LOOKUP_REQ to {nextID} node ","Get_Data")
+                else:
+                    data = {"message": LOOKUP_REP, "ip": self.address.ip , "port": self.address.ports[0], "node":  nextID,"key":key}        
+                    send_request((ip,int(port)),data=data)               
+
+    def update_key(self,data,request,addr):
+                key = data["user_key"]
+                nextID = self.localSuccNode(key)          # look up next node #-
+                
+                if not nextID == self.nodeID :
+                    #data = {"message": request, "ip": ip , "port": self.address.ports[0], "user_key": key } # send to succ                    
+                    notify_data(f"Sending {request}  to {nextID}: {str(self.node_address[nextID])} node ","SetData")
+                    send_request((self.node_address[nextID].ip,int(self.node_address[nextID].ports[0])),data=data)
+                else :
+                    self.Req_Method[request](data)
+                    self.db.check_db()
+                    next_node = self.FT[1]
+                    if not self.nodeID == next_node:
+                        notify_data(f"Sending {int(request)+1} to {next_node}","SetData")
+                        #data = {"message": str(int(request)+1), "ip": self.address.ip , "port": self.address.ports[0], "node":  nextID,"user_key":key}
+                        data["message"] = str(int(request)+1)
+                        send_request((self.node_address[next_node].ip,int(self.node_address[next_node].ports[0])),data=data)
+
+
+
+
+    def get_key(self,data,request):            
+                key = data["user_key"]
+                sender_addr = data["sender_addr"]
+                nextID = self.localSuccNode(key)          # look up next node #-
+                if not nextID == self.nodeID :
+                    #data = {"message": request, "ip": ip , "port": port, "key": key,"sender_addr":sender_addr } # send to succ 
+                    send_request((self.node_address[nextID].ip,int(self.node_address[nextID].ports[0])),data=data)
+                    notify_data(f"Sending {request} to {nextID} node : {str(self.node_address[nextID])} ","GetData")
+                else:
+                    data = self.Req_Method[request](data)
+                    #data = self.get_data(data,int(request)+1)
+                    notify_data(f"Sending  {int(request)+1} to {sender_addr}","GetData")
+                    send_request((sender_addr[0],sender_addr[1]),data=data)
+                    
+    def set_data(self,data):
+        key = data["key"]
+        value = data["value"]
+        self.database[key] = value
+        notify_data(f"Set {value} to {key} key","SetData")
+
+    def get_data(self,data):
+        key = data["key"]
+        try: value = self.database[key] 
+        except KeyError:
+           notify_data(colored(f"Key {key} not found","Error"))
+           return None
+        notify_data(f"Obtained {value} to {key} key","GetData")
+        return value              
+    
+    def create_account(self,data):
+        self.db.create_account(data["user_key"],data["user_name"],data["last_name"],data["password"])
+
+    def get_account(self,data):
+        response = str(int(data["message"])+1)
+        user_name,last_name=self.db.get_account(data["user_key"],data["password"])
+        resp_data = {"message": str(response),'user_name':user_name,'last_name':last_name}
+        if not user_name: notify_data("This account doesn't exist","Error")
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data
+    
+    def create_group(self,data):
+        self.db.create_group(data["user_key"],data["id_group"],data["group_name"],data["group_type"],data["size"])
+    
+    def get_notifications(self,data):
+        ids,texts=self.db.get_notifications(data["user_key"])
+        resp_data = {"message": GET_NOTIF_RESP,'ids': ids,'texts': texts}
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data
+
+    def delete_notification(self,data):
+        self.db.delete_notification(data["user_key"],data["id_notification"])
+
+    def create_event(self,data):
+        self.db.create_event(data["user_key"],data["id_event"],data["event_name"],data["date_initial"],data["date_end"],data["state"],data["visibility"],data["group"],data["creator"],data["size"])
+
+
+
+
+    def get_all_events(self,data):
+        idevents,enames,datesc,datesf,states,visibs,creators,idgroups,sizes=self.db.get_all_events(data["user_key"],data["privacity"])
+        resp_data = {"message": GET_EVENTS_RESP, "ids_event": idevents, "event_names": enames, "dates_ini": datesc, "dates_end": datesf, 
+                     "states": states, "visibilities": visibs, "creators": creators, "id_groups": idgroups, "sizes":sizes  }
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data
+    
+    def delete_event(self,data):
+        user_key = data["user_key"] 
+        id_event = data["id_event"]
+        self.db.delete_event(user_key,id_event) 
+    
+    def get_groups_belong_to(self,data):
+        idsgroup,gnames,gtypes,refs,sizes = self.db.get_groups_belong_to(data["user_key"])
+        resp_data = {"message": GET_GROUPS_RESP, "ids_group": idsgroup, "group_names": gnames, "group_types": gtypes, "group_refs": refs, "sizes":sizes  }
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data 
+      
+    def accept_pendient_event(self,data):
+        self.db.accept_pendient_event(data["user_key"],data["id_event"])
+
+    def get_event(self,data):
+        event,ename,datec,datef,state,visib,creator,group,size = self.db.get_event(data["user_key"],data["id_event"])
+        resp_data = {"message": GET_EVENT_RESP, "id_event": event, "event_name": ename, "date_ini": datec, "date_end": datef, 
+                     "state": state, "visibility": visib, "creator": creator, "id_group": group, "size":size  }
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data
+    
+    def get_group_type(self,data):
+        gtype = self.db.get_group_type(data["user_key"],data["id_group"])
+        resp_data = {"message": GET_GROUP_TYPE_RESP, "group_type": gtype  }
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data
+    
+    def get_equal_members(self,data):
+        ids = self.db.get_equal_members(data["id_group"])
+        resp_data = {"message": GET_NON_HIER_MEMB_RESP, "ids": ids  }
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data
+    
+    def get_inferior_members(self,data):
+        ids,roles = self.db.get_inferior_members(data["id_user"],data["id_group"])
+        resp_data = {"message": GET_HIER_MEMB_RESP, "ids": ids, "roles": roles  }
+        resp_data["ip"] = data["ip"] 
+        resp_data["port"] = data["port"] 
+        resp_data["sender_addr"] = data["sender_addr"]
+        return resp_data
+    
+    def add_member_group(self,data):
+        self.db.add_member_group(data["id_group"],data["id_user"],data["role"],data["level"])
+
+    def add_member_account(self,data):
+        self.db.add_member_account(data["user_key"],data["id_group"],data["group_name"],data["group_type"],data["id_ref"],data["size"])
