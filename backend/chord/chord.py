@@ -2,11 +2,13 @@
 import hashlib
 import json
 import os
+import shutil
 import socket
 import threading
 import time
 import zipfile
 from backend.app.models.db_model import DBModel, notify_data
+from contants import *
 
 def hash_key(key: str) -> int:
     """
@@ -373,3 +375,114 @@ class ChordNode:
         self.index_data(False)
         send_request(address,num_bytes=5120)
         notify_data(f"Sending REP_DATA to {self.Sucessor}","GetData")       
+
+
+    def join(self):
+
+        addresses,self.nodeSet = self.discover_nodes(False)
+        print(addresses)
+        notify_data("Joined to an %s chord network as node %s" % (self.nBits,self.nodeID),"Join")
+        notify_data("Discovered nodes %s" % (self.nodeSet),"Join")
+
+        #building node_address dict
+        self.node_address = self.get_addresses(addresses)
+        
+        #Computing Finger Table
+        self.recomputeFingerTable()
+
+        self.recieve_checks_thread =  threading.Thread(target=self.recieve_checks)
+        self.recieve_checks_thread.start() 
+
+        if len(self.nodeSet) > 1:
+            self.update_data(True)
+            self.update_data(False)
+            
+        if len(self.nodeSet) > 2:
+            self.conn_to_suc_suc()
+
+        self.recieve_files_thread =  threading.Thread(target=self.recieve_files)
+        self.recieve_files_thread.start()
+
+        self.check_sucessor_thread = threading.Thread(target=self.check_sucessor)
+        self.check_sucessor_thread.start()
+
+    def discover_nodes(self,find_leader):
+        current_leader = self.nodeID
+        leader_address = self.address
+        discovered_nodes = [self.nodeID]
+        discovered_addresses = {self.nodeID:(self.address.ip,self.address.ports)}
+        msg_to_send = CHECK_REQ if find_leader else JOIN_REQ
+        msg_to_rcv  = CHECK_REP if find_leader else JOIN_REP
+        for address in self.possible_addresses:
+            data = {"message": msg_to_send, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
+            data = send_request(address,data=data,answer_requiered=True)
+            if data:
+                if data["message"] == msg_to_rcv:
+                    current_id = data["nodeID"]
+                    leader = data["leader"]
+                    ip = data["ip"]
+                    ports = data["ports"]
+                    discovered_addresses[current_id] = (ip,ports)
+                    discovered_nodes.append(current_id)
+
+                    notify_data(f'Node {current_id} discovered',"Join")
+
+                    if leader == current_id:
+                        self.leader = current_id
+                        notify_data(f'Leader found at node {current_id}',"Join")
+                        return data["addresses"],data["nodes_ID"]
+                
+                    elif current_id > current_leader:
+                        current_leader = current_id
+                        leader_address = Address(ip,ports)
+                                   
+        if current_leader == self.nodeID:
+                notify_data('Setting myself as leader',"Join")
+                discovered_nodes.sort()
+                self.leader = self.nodeID
+                thread = threading.Thread(target=self.leader_labor)
+                thread .start()
+        else: 
+            notify_data(f'Greatest node found : {current_leader}. That one is the leader',"Join")
+            data = {"message": SET_LEADER, "ip": self.address.ip, "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
+            send_request((leader_address.ip,int(leader_address.ports[1])),data=data)
+            discovered_nodes.sort()
+            self.leader = current_leader
+
+        return discovered_addresses,discovered_nodes   
+    
+    def update_data(self,get_data):
+        
+        node = self.Sucessor if get_data else self.Predecessor
+        request = MOV_DATA_REQ if get_data else REP_DATA_REQ
+        response = MOV_DATA_REP if get_data else REP_DATA_REP
+        receiver = "sucessor" if get_data else "predecessor"
+        update_method = self.initialize_data if get_data else self.db.replicate_db
+        
+        notify_data(f"Connecting to {receiver} : node {node}","GetData")
+        my_index = self.nodeSet.index(self.nodeID)
+        
+        address = (self.node_address[node].ip,int(self.node_address[node].ports[1]))
+        data = {"message": request, "ip": self.address.ip , "port": self.address.ports, "nodeID": self.nodeID}
+        if get_data: 
+            data["startID"] = self.Predecessor
+            data["del_rep"] = len(self.nodeSet) > 2
+        data["pred_pred"] = self.nodeSet[my_index-2] 
+
+        successfull = send_request(address,data=data,answer_requiered=True,expected_zip_file=True,num_bytes=5120)
+        if successfull:
+            update_method('copia.db')
+            notify_data(f"Data updated","database")
+            self.db.check_db()
+            os.remove('copia.db')
+
+    def conn_to_suc_suc(self):
+        my_index = self.nodeSet.index(self.nodeID)
+        node = self.nodeSet[(my_index+2)%len(self.nodeSet)] 
+        address = (self.node_address[node].ip,int(self.node_address[node].ports[1]))
+        notify_data(f"Sending DEL_REP_DATA to sucessor of sucessor : node {node}","GetData")
+        data = {"message": DEL_REP_DATA, "ip": self.address.ip , "port": self.address.ports, "nodeID": self.nodeID, "pred_pred" : self.Predecessor, "startID" : self.nodeID }
+        send_request(address,data=data)
+
+    def initialize_data(self,db_name):
+        shutil.copyfile(db_name,self.db.db_name)
