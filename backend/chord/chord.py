@@ -118,7 +118,7 @@ class ChordNode:
         self.nodeID = hash_key(key) 
         self.db = DBModel(self.nodeID)
         self.nBits = 160
-        self.Sucessor = None
+        self.Sucessors = [None,None]
         
        
         #Initializing Finger Table
@@ -165,8 +165,8 @@ class ChordNode:
     
     @property 
     def Req_Method(self):
-        return { CREATE_PROFILE: self.create_account , CREATE_GROUP: self.create_group, REP_GROUP:self.create_group, CREATE_EVENT: self.create_event, REP_PROFILE: self.create_account, GET_GROUP_TYPE:self.get_group_type,
-                GET_PROFILE: self.get_account,GET_GROUPS: self.get_groups_belong_to, GET_EVENTS:self.get_all_events,REP_EVENT: self.create_event, GET_NOTIFICATIONS: self.get_notifications,GET_EVENT:self.get_event,
+        return { CREATE_PROFILE: self.create_user , CREATE_GROUP: self.create_group, REP_GROUP:self.create_group, CREATE_EVENT: self.create_event, REP_PROFILE: self.create_user, GET_GROUP_TYPE:self.get_group_type,
+                GET_PROFILE: self.get_user,GET_GROUPS: self.get_groups_belong_to, GET_EVENTS:self.get_all_events,REP_EVENT: self.create_event, GET_NOTIFICATIONS: self.get_notifications,GET_EVENT:self.get_event,
                 DELETE_NOTIFICATION:self.delete_notification,DELETE_NOTIFICATION_REP:self.delete_notification, ACCEPT_EVENT: self.accept_pendient_event,ACCEPT_EVENT_REP:self.accept_pendient_event, DELETE_EVENT: self.delete_event,
                 GET_NON_HIERARCHICAL_MEMBERS:self.get_equal_members, GET_HIERARCHICAL_MEMBERS:self.get_inferior_members, ADD_MEMBER_ACCOUNT:self.add_member_account, ADD_MEMBER_ACCOUNT_REP:self.add_member_account,
                 ADD_MEMBER_GROUP:self.add_member_group, ADD_MEMBER_GROUP_REP:self.add_member_group}
@@ -195,11 +195,13 @@ class ChordNode:
         if len(self.nodeSet) > 1:
             self.FT[0]  = self.nodeSet[self.nodeSet.index(self.nodeID)-1] # Predecessor
             self.FT[1:] = [self.finger(i) for i in range(1,self.nBits+1)] # Sucessors
-        elif len(self.nodeSet)  == 1: self.FT = [self.nodeSet[0] for i in range(1,self.nBits+1)]
-        if not self.Sucessor: 
-            self.Sucessor = self.FT[1] 
+        elif len(self.nodeSet)  == 1: self.FT = [self.nodeSet[0] for _ in range(1,self.nBits+1)]
+        if not self.Sucessor[0]: 
+            self.Sucessor[0] = self.FT[1] 
+            if len(self.nodeSet) > 2 and not self.Sucessors[1]:
+                self.Sucessor[1] = self.FT[2]
             return 
-        if write_to_new_suc and not (self.Sucessor == self.nodeID) and not (self.Sucessor == self.FT[1]):
+        if write_to_new_suc and not (self.Sucessors[0] == self.nodeID) and not (self.Sucessor[0] == self.FT[1]):
             self.Sucessor = self.FT[1]
             if  not (self.Sucessor == self.nodeID): self.send_data_to_sucessor()
 
@@ -371,11 +373,54 @@ class ChordNode:
         
     def send_data_to_sucessor(self):
         notify_data(f"New sucessor found {self.Sucessor}","Join")
-        address = (self.node_address[self.Sucessor].ip,int(self.node_address[self.Sucessor].ports[2]))
         self.index_data(False)
-        send_request(address,num_bytes=5120)
-        notify_data(f"Sending REP_DATA to {self.Sucessor}","GetData")       
+        for sucessor in self.Sucessors:
+            address = (self.node_address[sucessor].ip,int(self.node_address[sucessor].ports[2]))
+            send_request(address,num_bytes=5120)
+            notify_data(f"Sending REP_DATA to {sucessor}","GetData")       
+    
+
+    def leader_labor(self):
+        time.sleep(30)
+        while self.leader == self.nodeID: 
+            addresses , new_nodes = self.check_network()
+
+            if  not (new_nodes == self.nodeSet):
+                self.node_address = self.get_addresses(addresses)
+                self.nodeSet = new_nodes
+                notify_data(f"New nodes {self.node_address}","Join")
+                self.recomputeFingerTable(write_to_new_suc = True)
+            else: 
+                notify_data(f"Nodes set already update","Check")
+                notify_data(f"Nodes {self.node_address}","Join")
+            time.sleep(30)
+
+    def check_network(self):
+        discovered_nodes = [self.nodeID]
+        discovered_addresses = {self.nodeID:(self.address.ip,self.address.ports)}
         
+        for address in self.possible_addresses:
+            #print(f'Connecting to {address} to check if node is alive') 
+            data = {"message": CHECK_REQ, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID,"leader":self.nodeID}
+            data = send_request(address,data=data,answer_requiered=True)
+            if data:
+                if data["message"] == CHECK_REP:
+                    current_id = data["nodeID"]
+                    leader = data["leader"]
+                    ip = data["ip"]
+                    ports = data["ports"]
+                    discovered_addresses[current_id] = (ip,ports)
+                    discovered_nodes.append(current_id)
+
+                    notify_data(f"Check response received from {current_id}","Check")
+
+                    if leader == current_id and current_id > self.nodeID:
+                        notify_data(f'There is a Leader with ID {current_id}, greater than mine. Im not leader anymore',"Join")
+                        self.leader = current_id
+                        return data["addresses"],data["nodes_ID"]
+        discovered_nodes.sort()
+        return discovered_addresses, discovered_nodes
+
 
     def run(self):
         #Receiving requests
@@ -444,8 +489,6 @@ class ChordNode:
                         send_request((self.node_address[next_node].ip,int(self.node_address[next_node].ports[0])),data=data)
 
 
-
-
     def get_key(self,data,request):            
                 key = data["user_key"]
                 sender_addr = data["sender_addr"]
@@ -470,18 +513,18 @@ class ChordNode:
         key = data["key"]
         try: value = self.database[key] 
         except KeyError:
-           notify_data(colored(f"Key {key} not found","Error"))
+           notify_data(f"Key {key} not found","Error")
            return None
         notify_data(f"Obtained {value} to {key} key","GetData")
         return value              
     
-    def create_account(self,data):
-        self.db.create_account(data["user_key"],data["user_name"],data["last_name"],data["password"])
+    def create_user(self,data):
+        self.db.create_user(data["user_key"],data["user_name"],data["user_email"],data["password"])
 
-    def get_account(self,data):
+    def get_user(self,data):
         response = str(int(data["message"])+1)
-        user_name,last_name=self.db.get_account(data["user_key"],data["password"])
-        resp_data = {"message": str(response),'user_name':user_name,'last_name':last_name}
+        user_name,user_email=self.db.get_user(data["user_key"],data["password"])
+        resp_data = {"message": str(response),'user_name':user_name,'user_email':user_email}
         if not user_name: notify_data("This account doesn't exist","Error")
         resp_data["ip"] = data["ip"] 
         resp_data["port"] = data["port"] 
@@ -489,7 +532,7 @@ class ChordNode:
         return resp_data
     
     def create_group(self,data):
-        self.db.create_group(data["user_key"],data["id_group"],data["group_name"],data["group_type"],data["size"])
+        self.db.create_group(data["user_key"],data["id_group"],data["group_name"],data["hierarchy"])
     
     def get_notifications(self,data):
         ids,texts=self.db.get_notifications(data["user_key"])
@@ -503,15 +546,13 @@ class ChordNode:
         self.db.delete_notification(data["user_key"],data["id_notification"])
 
     def create_event(self,data):
-        self.db.create_event(data["user_key"],data["id_event"],data["event_name"],data["date_initial"],data["date_end"],data["state"],data["visibility"],data["group"],data["creator"],data["size"])
-
-
+        self.db.create_event(data["user_key"],data["id_event"],data["description"],data["start_time"],data["end_time"],data["state"],data["visibility"])
 
 
     def get_all_events(self,data):
-        idevents,enames,datesc,datesf,states,visibs,creators,idgroups,sizes=self.db.get_all_events(data["user_key"],data["privacity"])
-        resp_data = {"message": GET_EVENTS_RESP, "ids_event": idevents, "event_names": enames, "dates_ini": datesc, "dates_end": datesf, 
-                     "states": states, "visibilities": visibs, "creators": creators, "id_groups": idgroups, "sizes":sizes  }
+        idevents,enames,datesc,datesf,states,visibs=self.db.get_all_events(data["user_key"],data["privacity"])
+        resp_data = {"message": GET_EVENTS_RESP, "ids_event": idevents, "event_names": enames, "start_time": datesc, "end_time": datesf, 
+                     "states": states, "visibilities": visibs }
         resp_data["ip"] = data["ip"] 
         resp_data["port"] = data["port"] 
         resp_data["sender_addr"] = data["sender_addr"]
@@ -523,8 +564,8 @@ class ChordNode:
         self.db.delete_event(user_key,id_event) 
     
     def get_groups_belong_to(self,data):
-        idsgroup,gnames,gtypes,refs,sizes = self.db.get_groups_belong_to(data["user_key"])
-        resp_data = {"message": GET_GROUPS_RESP, "ids_group": idsgroup, "group_names": gnames, "group_types": gtypes, "group_refs": refs, "sizes":sizes  }
+        idsgroup,gnames,hierarchies = self.db.get_groups_belong_to(data["user_key"])
+        resp_data = {"message": GET_GROUPS_RESP, "ids_group": idsgroup, "group_names": gnames, "hierarchies": hierarchies }
         resp_data["ip"] = data["ip"] 
         resp_data["port"] = data["port"] 
         resp_data["sender_addr"] = data["sender_addr"]
@@ -567,10 +608,10 @@ class ChordNode:
         return resp_data
     
     def add_member_group(self,data):
-        self.db.add_member_group(data["id_group"],data["id_user"],data["role"],data["level"])
+        self.db.add_member_group(data["id_group"],data["id_user"],data["hierarchy"],data["level"])
 
-    def add_member_account(self,data):
-        self.db.add_member_account(data["user_key"],data["id_group"],data["group_name"],data["group_type"],data["id_ref"],data["size"])
+    def add_member_user(self,data):
+        self.db.add_member_user(data["user_key"],data["id_group"],data["description"],data["hierarchy"])
 
 
     def join(self):
