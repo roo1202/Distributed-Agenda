@@ -2,11 +2,11 @@
 from fastapi import HTTPException
 from sqlalchemy import insert, select, update
 from sqlalchemy.orm import Session
-from app.models.group import Group
-from app.schemas.group import GroupCreate, GroupUpdate
-from app.models.user import User
-from app.models.group_user_association import association_table
-from app.models.event import Event
+from models.group import Group
+from schemas.group import GroupCreate, GroupUpdate
+from models.user import User
+from models.group_user_association import association_table
+from models.event import Event
 
 # Añadir un usuario a un grupo
 def add_user_to_group(db: Session, user_id: int, group_id: int, hierarchy_level: int = 0):

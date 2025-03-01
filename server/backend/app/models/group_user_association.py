@@ -1,5 +1,5 @@
 from sqlalchemy import Table, Column, Integer, ForeignKey, Boolean, String
-from app.db.base import Base
+from db.base import Base
 
 association_table = Table(
     'group_user_association',

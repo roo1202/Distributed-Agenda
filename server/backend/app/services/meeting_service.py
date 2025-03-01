@@ -1,11 +1,11 @@
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models.meeting import Meeting
-from app.schemas.meeting import MeetingCreate
-from app.models.user import User
-from app.models.event import Event
-from app.services.group_service import get_hierarchy_level
+from models.meeting import Meeting
+from schemas.meeting import MeetingCreate
+from models.user import User
+from models.event import Event
+from services.group_service import get_hierarchy_level
 from .user_service import get_user_by_id
 
 # Crear una nueva reunion

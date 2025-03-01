@@ -1,9 +1,9 @@
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models.event import Event
-from app.schemas.event import EventCreate
-from app.models.meeting import Meeting
+from models.event import Event
+from schemas.event import EventCreate
+from models.meeting import Meeting
 
 # Crear un nuevo evento
 def create_event(db: Session, description: str, start_time: datetime, end_time: datetime, state: str, user_id: int):

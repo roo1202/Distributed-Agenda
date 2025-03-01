@@ -1,10 +1,5 @@
-
-from event import Event
-from group import Group
-from meeting import Meeting
-from user import User
-from group_user_association import association_table
-from notification import Notification
+from .group import Group
+from .meeting import Meeting
 from sqlalchemy.orm import Session
 from services.user_service import *
 from services.meeting_service import *

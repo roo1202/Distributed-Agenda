@@ -1,6 +1,6 @@
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import Column, Integer, String, ForeignKey, DATETIME
-from app.db.base import Base
+from db.base import Base
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -10,4 +10,4 @@ class Notification(Base):
     text = Column(String, nullable=False)
     time = Column(DATETIME, nullable=False)
     
-    __table_args__ = (UniqueConstraint('user_id', 'notification_id'),)
+    __table_args__ = (UniqueConstraint('user_id', 'id'),)
