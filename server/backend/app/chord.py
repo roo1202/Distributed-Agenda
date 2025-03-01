@@ -433,7 +433,7 @@ class ChordNode:
         while True:
           time.sleep(20)
           for sucessor in self.Sucessors:
-            if not sucessor == self.nodeID:
+            if sucessor and sucessor != self.nodeID:
                 data = {"message": CHECK_SUC, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
                 address = (self.node_address[sucessor].ip,int(self.node_address[sucessor].ports[3]))
                 notify_data(f"Sending CHECK_SUC to {sucessor}","Check")
@@ -457,7 +457,7 @@ class ChordNode:
         while self.leader == self.nodeID: 
             addresses , new_nodes = self.check_network()
 
-            if  not (new_nodes == self.nodeSet):
+            if  len(new_nodes) > 1 and not (new_nodes == self.nodeSet):
                 self.node_address = self.get_addresses(addresses)
                 self.nodeSet = new_nodes
                 notify_data(f"New nodes {self.node_address}","Join")
@@ -471,25 +471,26 @@ class ChordNode:
         discovered_nodes = [self.nodeID]
         discovered_addresses = {self.nodeID:(self.address.ip,self.address.ports)}
         
-        for address in self.possible_addresses:
-            #print(f'Connecting to {address} to check if node is alive') 
-            data = {"message": CHECK_REQ, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID,"leader":self.nodeID}
-            data = send_request(address,data=data,answer_requiered=True)
-            if data:
-                if data["message"] == CHECK_REP:
-                    current_id = data["nodeID"]
-                    leader = data["leader"]
-                    ip = data["ip"]
-                    ports = data["ports"]
-                    discovered_addresses[current_id] = (ip,ports)
-                    discovered_nodes.append(current_id)
+        for _,address in self.node_address.items():
+            if address != self.address:
+                #print(f'Connecting to {address} to check if node is alive') 
+                data = {"message": CHECK_REQ, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID,"leader":self.nodeID}
+                data = send_request((address.ip, int(address.ports[0])),data=data,answer_requiered=True)
+                if data:
+                    if data["message"] == CHECK_REP:
+                        current_id = data["nodeID"]
+                        leader = data["leader"]
+                        ip = data["ip"]
+                        ports = data["ports"]
+                        discovered_addresses[current_id] = (ip,ports)
+                        discovered_nodes.append(current_id)
 
-                    notify_data(f"Check response received from {current_id}","Check")
+                        notify_data(f"Check response received from {current_id}","Check")
 
-                    if leader == current_id and current_id > self.nodeID:
-                        notify_data(f'There is a Leader with ID {current_id}, greater than mine. Im not leader anymore',"Join")
-                        self.leader = current_id
-                        return data["addresses"],data["nodes_ID"]
+                        if leader == current_id and current_id > self.nodeID:
+                            notify_data(f'There is a Leader with ID {current_id}, greater than mine. Im not leader anymore',"Join")
+                            self.leader = current_id
+                            return data["addresses"],data["nodes_ID"]
         discovered_nodes.sort()
         return discovered_addresses, discovered_nodes
 
@@ -686,7 +687,7 @@ class ChordNode:
         msg_to_rcv  = CHECK_REP if find_leader else JOIN_REP
         if not find_leader:
             server = self.discover_server()
-            possible_addresses = [Address(server[0], server[1])]
+            possible_addresses = [Address(server[0], server[1])] if server else []
         else :
             possible_addresses = [address for _, address in self.node_address]
         for address in possible_addresses:
@@ -894,4 +895,11 @@ class ChordNode:
         resp_data["port"] = data["port"]
         resp_data["sender_addr"] = data["sender_addr"]
         return resp_data
+    
+    
+    def add_member_group(self,data):
+        self.db.add_member_group(data["id_group"],data["id_user"],data["role"],data["level"])
+
+    def add_member_account(self,data):
+        self.db.add_member_account(data["user_key"],data["id_group"],data["group_name"],data["group_type"],data["id_ref"],data["size"])
     
