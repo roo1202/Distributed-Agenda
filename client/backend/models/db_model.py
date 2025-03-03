@@ -174,33 +174,33 @@ class DBModel:
 
     # Metodos para el manejo de la base de datos 
 
-    def create_user(self, data):
+    def create_user(self, name: str, email: str, password: str):
         """
         Crea un nuevo usuario.
         """
         db = self.get_session()
         try:
-            return create_user(db, data["user_name"], data["user_email"], data["password"])
+            return create_user(db, name, email, password)
         finally:
             db.close()
-                
-    def get_user_by_email(self, data):
+
+    def get_user_by_email(self, user_email: str):
         """
         Obtiene un usuario por su email.
         """
         db = self.get_session()
         try:
-            return get_user_by_email(db, data["user_email"])
+            return get_user_by_email(db, user_email)
         finally:
             db.close()
 
-    def get_user_by_id(self, data):
+    def get_user_by_id(self, user_id: int):
         """
         Obtiene un usuario por su ID.
         """
         db = self.get_session()
         try:
-            return get_user_by_id(db, data["user_key"])
+            return get_user_by_id(db, user_id)
         finally:
             db.close()
 
@@ -214,164 +214,165 @@ class DBModel:
         finally:
             db.close()
 
-    def update_user(self, data):
+    def update_user(self, user_id: int, new_name: str):
         """
         Actualiza el nombre de un usuario por su ID.
         """
         db = self.get_session()
         try:
-            return update_user(db, data["user_key"], data["new_user_name"])
+            return update_user(db, user_id, new_name)
         finally:
             db.close()
 
-    def delete_user(self, data):
+    def delete_user(self, user_id: int):
         """
         Elimina un usuario por su ID.
         """
         db = self.get_session()
         try:
-            return delete_user(db, data["user_key"])
+            return delete_user(db, user_id)
         finally:
             db.close()
 
-    def create_meeting(self, data):
+
+    def create_meeting(self, users_email: list[str], state: str, event_id: int, user_id: int):
         """
         Crea una nueva reunión.
         """
         db = self.get_session()
         try:
-            return create_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"])
+            return create_meeting(db, users_email, state, event_id, user_id)
         finally:
             db.close()
 
-    def create_group_meeting(self, data):
+    def create_group_meeting(self, users_email: list[str], state: str, event_id: int, user_id: int, group_id: int):
         """
         Crea una nueva reunión de grupo.
         """
         db = self.get_session()
         try:
-            return create_group_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"], data["group_id"])
+            return create_group_meeting(db, users_email, state, event_id, user_id, group_id)
         finally:
             db.close()
 
-    def add_meetings(self, data):
+    def add_meetings(self, meetings: list[Meeting]):
         """
         Agrega múltiples reuniones a la base de datos.
         """
         db = self.get_session()
         try:
-            return add_meetings(db, data["meetings"])
+            return add_meetings(db, meetings)
         finally:
             db.close()
 
-    def get_meeting_by_id(self, data):
+    def get_meeting_by_id(self, meeting_id: int, user_id: int):
         """
         Obtiene una reunión por su ID.
         """
         db = self.get_session()
         try:
-            return get_meeting_by_id(db, data["meeting_id"], data["user_key"])
+            return get_meeting_by_id(db, meeting_id, user_id)
         finally:
             db.close()
 
-    def get_meetings(self, data):
+    def get_meetings(self, user_id: int):
         """
         Obtiene todas las reuniones de un usuario.
         """
         db = self.get_session()
         try:
-            return get_meetings(db, data["user_key"])
+            return get_meetings(db, user_id)
         finally:
             db.close()
 
-    def update_meeting(self, data):
+    def update_meeting(self, meeting_id: int, new_event_id: int, new_state: str, user_id: int):
         """
         Actualiza una reunión por su ID.
         """
         db = self.get_session()
         try:
-            return update_meeting(db, data["meeting_id"], data["new_event_id"], data["new_state"], data["user_key"])
+            return update_meeting(db, meeting_id, new_event_id, new_state, user_id)
         finally:
             db.close()
 
-    def delete_meeting(self, data):
+    def delete_meeting(self, meeting_id: int, user_id: int):
         """
         Elimina una reunión por su ID.
         """
         db = self.get_session()
         try:
-            return delete_meeting(db, data["meeting_id"], data["user_key"])
+            return delete_meeting(db, meeting_id, user_id)
         finally:
             db.close()
 
-    def add_user_to_group(self, data):
+    
+    def add_user_to_group(self, user_id: int, group_id: int, hierarchy_level: int = 0):
         """
         Añade un usuario a un grupo.
         """
         db = self.get_session()
         try:
-            return add_user_to_group(db, data["user_id"], data["group_id"], data.get("hierarchy_level", 0))
+            return add_user_to_group(db, user_id, group_id, hierarchy_level)
         finally:
             db.close()
 
-    def remove_user_from_group(self, data):
+    def remove_user_from_group(self, user_id: int, group_id: int):
         """
         Elimina un usuario de un grupo.
         """
         db = self.get_session()
         try:
-            return remove_user_from_group(db, data["user_key"], data["group_id"])
+            return remove_user_from_group(db, user_id, group_id)
         finally:
             db.close()
 
-    def get_users_in_group(self, data):
+    def get_users_in_group(self, group_id: int):
         """
         Obtiene todos los usuarios que pertenecen a un grupo.
         """
         db = self.get_session()
         try:
-            return get_users_in_group(db, data["group_id"])
+            return get_users_in_group(db, group_id)
         finally:
             db.close()
 
-    def get_events_in_group(self, data):
+    def get_events_in_group(self, group_id: int, user_id: int):
         """
         Obtiene todos los eventos de un grupo.
         """
         db = self.get_session()
         try:
-            return get_events_in_group(db, data["group_id"], data["user_key"])
+            return get_events_in_group(db, group_id, user_id)
         finally:
             db.close()
 
-    def get_user_groups(self, data):
+    def get_user_groups(self, user_id: int):
         """
         Obtiene todos los grupos de un usuario.
         """
         db = self.get_session()
         try:
-            return get_user_groups(db, data["user_key"])
+            return get_user_groups(db, user_id)
         finally:
             db.close()
 
-    def create_group(self, data):
+    def create_group(self, group: GroupCreate):
         """
         Crea un nuevo grupo.
         """
-        groupCreate = GroupCreate(name=data['group_name'], hierarchy=data['hierarchy'], creator=data['creator'])
         db = self.get_session()
         try:
-            return create_group(db, groupCreate)
+            return create_group(db, group)
         finally:
             db.close()
 
-    def get_group_by_id(self, data):
+    def get_group_by_id(self, group_id: int):
         """
         Obtiene un grupo por su ID.
         """
         db = self.get_session()
         try:
-            return get_group_by_id(db, data["group_id"])
+            return get_group_by_id(db, group_id)
         finally:
             db.close()
 
@@ -385,132 +386,134 @@ class DBModel:
         finally:
             db.close()
 
-    def update_group(self, data):
+    def update_group(self, group_id: int, group_update: GroupUpdate):
         """
         Actualiza un grupo.
         """
         db = self.get_session()
         try:
-            return update_group(db, data["group_id"], data["group_update"])
+            return update_group(db, group_id, group_update)
         finally:
             db.close()
 
-    def delete_group(self, data):
+    def delete_group(self, group_id: int):
         """
         Elimina un grupo.
         """
         db = self.get_session()
         try:
-            return delete_group(db, data["group_id"])
+            return delete_group(db, group_id)
         finally:
             db.close()
 
-    def is_hierarchy_group(self, data):
+    def is_hierarchy_group(self, group_id: int):
         """
         Verifica si un grupo es jerárquico.
         """
         db = self.get_session()
         try:
-            return is_hierarchy_group(db, data["group_id"])
+            return is_hierarchy_group(db, group_id)
         finally:
             db.close()
 
-    def get_hierarchy_level(self, data):
+    def get_hierarchy_level(self, user_id: int, group_id: int):
         """
         Obtiene el nivel de jerarquía de un usuario en un grupo.
         """
         db = self.get_session()
         try:
-            return get_hierarchy_level(db, data["user_key"], data["group_id"])
+            return get_hierarchy_level(db, user_id, group_id)
         finally:
             db.close()
 
-    def get_invited_groups(self, data):
+    def get_invited_groups(self, user_id: int):
         """
         Obtiene los grupos a los que se está invitando a un usuario.
         """
         db = self.get_session()
         try:
-            return get_invited_groups(db, data["user_key"])
+            return get_invited_groups(db, user_id)
         finally:
             db.close()
 
-    def update_hierarchy_level(self, data):
+    def update_hierarchy_level(self, user_id: int, group_id: int, new_hierarchy_level: int):
         """
         Modifica el nivel de jerarquía de un usuario en un grupo.
         """
         db = self.get_session()
         try:
-            return update_hierarchy_level(db, data["user_key"], data["group_id"], data["new_hierarchy_level"])
+            return update_hierarchy_level(db, user_id, group_id, new_hierarchy_level)
         finally:
             db.close()
 
-    def create_event(self, data):
+    
+    def create_event(self, description: str, start_time: datetime, end_time: datetime, state: str, user_id: int):
         """
         Crea un nuevo evento.
         """
         db = self.get_session()
         try:
-            return create_event(db, data["description"], data["start_time"], data["end_time"], data["state"], data["user_key"])
+            return create_event(db, description, start_time, end_time, state, user_id)
         finally:
             db.close()
 
-    def get_event_by_id(self, data):
+    def get_event_by_id(self, event_id: int):
         """
         Obtiene un evento por su ID.
         """
         db = self.get_session()
         try:
-            return get_event_by_id(db, data["event_id"])
+            return get_event_by_id(db, event_id)
         finally:
             db.close()
 
-    def get_events(self, data):
+    def get_events(self, user_id: int):
         """
         Obtiene todos los eventos de un usuario.
         """
         db = self.get_session()
         try:
-            return get_events(db, data["user_key"])
+            return get_events(db, user_id)
         finally:
             db.close()
 
-    def update_event(self, data):
+    def update_event(self, event_id: int, new_description: str, new_start_time: datetime, new_end_time: datetime, new_state: str, user_id: int):
         """
         Actualiza un evento por su ID.
         """
         db = self.get_session()
         try:
-            return update_event(db, data["event_id"], data["new_description"], data["new_start_time"], data["new_end_time"], data["new_state"], data["user_key"])
+            return update_event(db, event_id, new_description, new_start_time, new_end_time, new_state, user_id)
         finally:
             db.close()
 
-    def delete_event(self, data):
+    def delete_event(self, user_id: int, event_id: int):
         """
         Elimina un evento por su ID.
         """
         db = self.get_session()
         try:
-            return delete_event(db, data["event_id"], data["user_key"])
+            return delete_event(db, event_id, user_id)
         finally:
             db.close()
 
-    def get_notifications(self, data):
+
+    def get_notifications(self, user_id : int):
         """
-        Obtiene todas las notificaciones de un usuario.
+        Obtiene todas las notificaciones de un usuario
         """
         db = self.get_session()
         try:
-            return get_notifications(db, data["user_key"])
+            return get_notifications(db, user_id)
         finally:
             db.close()
 
-    def delete_notification(self, data):
+    def delete_notification(self, user_id: int, notification_id: int):
         """
-        Elimina una notificación por su ID.
+        Elimina una notificacion por su ID.
         """
         db = self.get_session()
         try:
-            return delete_notification(db, data["notification_id"], data["user_key"])
+            return delete_notification(db, notification_id, user_id)
         finally:
             db.close()

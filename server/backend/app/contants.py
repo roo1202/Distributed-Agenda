@@ -72,3 +72,11 @@ GET_GROUP_TYPE_RESP = '79'
 
 MCAST_GRP = "224.0.0.1"
 MCAST_PORT = 10003
+
+# Host y puertos
+HOST = "0.0.0.0"
+CLIENT_PORT = 65434  # Para la comunicación con clientes
+SERVER_PORT = 65433  # Para la comunicación entre gestores
+FILES_PORT = 65432
+CHECK_PORT = 65431
+HEARD_PORT = 65430

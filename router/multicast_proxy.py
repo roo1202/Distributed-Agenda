@@ -14,16 +14,15 @@ MIN_PORT = 10000
 PROCESS_AMOUNT = 5
 
 MULTICAST_GROUP = "224.0.0.1"  # Dirección de multicast
-MULTICAST_PORT = 10000         # Puerto para discovery
 
 def proxy(port, servers, read_buffer=4196):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    server_address = ('', port)
+    server_address = (MULTICAST_GROUP, port)
     sock.bind(server_address)
 
-    # kernel support for reaching destintation addr
+    # Configuración para obtener la dirección de destino original
     sock.setsockopt(socket.IPPROTO_IP, IP_RECVORIGDSTADDR, 1)
     sock.setsockopt(socket.SOL_IP, socket.IP_TRANSPARENT, 1)
 
@@ -34,7 +33,7 @@ def proxy(port, servers, read_buffer=4196):
 
         client_net = address[0].split('.')[2]
         primary_net = LOCAL_ADDRS[1].split('.')[2]
-        # Avoid addr loops and pck duplicates
+        # Evitar bucles y duplicados
         if address[0] in RESERVED_ADDRS or address[0] in LOCAL_ADDRS or client_net != primary_net:
             continue
 
@@ -47,32 +46,67 @@ def proxy(port, servers, read_buffer=4196):
                     raise TypeError(f"Unsupported socket type '{family}'")
 
                 ip = socket.inet_ntop(family, cmsg_data[4:8])
-                print(f"Received data {data} from {address}, original destination: {(ip, port)}")
+                print(f"Received data {data} from {address}")
                 ip_object = ipaddress.ip_address(ip)
 
                 if ip_object.is_multicast:
                     try:
                         message = json.loads(data.decode('utf-8'))
-                        if message.get("message") == "DISCOVER":
+                        if message["message"] == "DISCOVER":
                             # Selecciona un servidor de la lista de servidores disponibles
                             if servers:
-                                server_ip, server_port = servers[0]  # Puedes implementar un algoritmo de selección más sofisticado
-                                response = json.dumps({"message": "SERVER_ADDRESS", "ip": server_ip, "port": server_port})
+                                server_ip, server_ports = servers[0]  # Puedes implementar un algoritmo de selección más sofisticado
+                                response = json.dumps({"message": "SERVER_ADDRESS", "ip": server_ip, "port": server_ports[1]})
+
+                                # Crear un nuevo socket para enviar la respuesta multicast
                                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                                    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
-                                    s.sendto(response.encode('utf-8'), (ip, port))
-                                    print(f"Sent server address {server_ip}:{server_port} to {address}")
+                                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                                    s.setsockopt(socket.SOL_IP, socket.IP_TRANSPARENT, 1)
+
+                                    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)  
+                                    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1) 
+                                    s.setsockopt(
+                                        socket.IPPROTO_IP,
+                                        socket.IP_MULTICAST_IF,
+                                        socket.inet_aton("192.168.1.100"),  
+                                    )
+
+                                    # Enviar la respuesta al cliente
+                                    s.sendto(response.encode('utf-8'), address)
+                                    print(f"Sent server address {server_ip}:{server_ports[1]} to {address}")
                             else:
                                 print("No servers available to respond to client request")
 
-                        elif message.get("message") == "REGISTER":
+                        elif message["message"] == "REGISTER":
                             # Registrar un servidor
                             server_ip = message["ip"]
-                            server_port = message["port"]
-                            servers.append((server_ip, server_port))
-                            print(f"Registered server {server_ip}:{server_port}")
+                            server_ports = message["ports"]
+                            servers.append((server_ip, server_ports))
+                            print(f"Registered server {server_ip}:{server_ports}")
                             print(f"Current servers: {servers}")
 
+                        elif message["message"] == "DISCOVER_NODE":
+                            # Selecciona un servidor de la lista de servidores disponibles
+                            if servers:
+                                server_ip, server_ports = servers[0]  # Puedes implementar un algoritmo de selección más sofisticado
+                                response = json.dumps({"message": "SERVER_ADDRESS", "ip": server_ip, "port": server_ports[0]})
+
+                                # Crear un nuevo socket para enviar la respuesta multicast
+                                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                                    s.setsockopt(socket.SOL_IP, socket.IP_TRANSPARENT, 1)
+
+                                    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)  
+                                    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1) 
+                                    s.setsockopt(
+                                        socket.IPPROTO_IP,
+                                        socket.IP_MULTICAST_IF,
+                                        socket.inet_aton("192.168.1.100"),  
+                                    )
+
+                                    # Enviar la respuesta al servidor
+                                    s.sendto(response.encode('utf-8'), (ip, port))
+                                    print(f"Sent server address {server_ip}:{server_ports[0]} to {address}")
                     except json.JSONDecodeError:
                         print("Invalid JSON received")
                     except Exception as e:
@@ -80,21 +114,19 @@ def proxy(port, servers, read_buffer=4196):
 
 def check_servers_availability(servers):
     while True:
-        time.sleep(30)  # Verificar cada 30 segundos
-        for server in list(servers):  # Usar list() para evitar problemas de modificación durante la iteración
-            server_ip, server_port = server
+        time.sleep(30)
+        for server in list(servers):  # Iterar sobre copia de la lista
+            server_ip, server_ports = server
             try:
-                # Intentar conectarse al servidor
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(5)  # Timeout de 5 segundos
-                sock.connect((server_ip, server_port))
-                sock.close()
-                print(f"Server {server_ip}:{server_port} is alive")
-            except (socket.timeout, ConnectionRefusedError):
-                # Si no responde, eliminarlo de la lista
+                # Usar UDP para heartbeats (más eficiente)
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.settimeout(5)  # Timeout más corto
+                    sock.sendto(b"PING", (server_ip, server_ports[2]))
+                    sock.recvfrom(1024)  # Esperar cualquier respuesta
+                    print(f"Server {server_ip}:{server_ports[2]} responde")
+            except (socket.timeout, ConnectionRefusedError, OSError):
                 servers.remove(server)
-                print(f"Server {server_ip}:{server_port} is down and has been removed")
-                
+                print(f"Server {server_ip}:{server_ports[2]} eliminado")
 
 if __name__ == "__main__":
     with Manager() as manager:
@@ -103,7 +135,7 @@ if __name__ == "__main__":
 
         # Iniciar el hilo de verificación de servidores
         heartbeat_thread = threading.Thread(target=check_servers_availability, args=(servers,))
-        heartbeat_thread.daemon = True  # El hilo se detendrá cuando el programa principal termine
+        heartbeat_thread.daemon = True  # El hilo se detendrá cuando el proceso principal termine
         heartbeat_thread.start()
 
         for i in range(PROCESS_AMOUNT):

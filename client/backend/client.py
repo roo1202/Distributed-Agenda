@@ -1,10 +1,126 @@
+import hashlib
 import json
+import os
 import socket
-from backend.app.models.db_model import GType, Privacity, State, notify_data
-from backend.chord.chord import Address, hash_key, send_request
-from contants import *
-import time 
+import zipfile
 
+from sqlalchemy import Enum
+from contants import *
+
+
+def hash_key(key: str) -> int:
+    """
+    Función de hash que calcula el hash SHA-1 de una cadena de caracteres y devuelve un número entero que se utiliza como la clave del nodo en la red Chord.
+    """
+    sha1 = hashlib.sha1(key.encode('utf-8'))
+    hash_value = int(sha1.hexdigest(), 16) 
+    return hash_value
+
+
+class Address():
+    def __init__(self,ip,ports):
+        self.ip = ip
+        self.ports = ports
+
+    def __str__(self):
+        return f"tcp:{self.ip}:{self.ports[0]}"
+    
+    def __repr__(self):
+        return f"ip:{self.ip} ports:{self.ports}"
+    
+
+def send_request(address,data=None,answer_requiered=False,expected_zip_file=False,num_bytes=1024):     
+            sender = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try : 
+                sender.connect(address)
+            except ConnectionRefusedError as e :
+                sender.close()
+                return None
+                #print("Error de conexion :", e)
+                
+            # establecer un tiempo de espera de 10 segundos
+            sender.settimeout(10)
+            if data:
+                json_data = json.dumps(data).encode('utf-8')
+                sender.send(json_data)
+            else: 
+                send_copy_db(sender,num_bytes)
+
+            if answer_requiered:
+              try:
+                # Esperar la llegada de un mensaje
+                
+                if not expected_zip_file:
+                  data = sender.recv(num_bytes)
+                  data = data.decode('utf-8')
+                  data = json.loads(data) 
+                  sender.close()
+                else:
+                    data = recieve_copy_db(sender,num_bytes)
+              except socket.timeout:
+                # Manejar la excepción si se agotó el tiempo de espera
+                if not expected_zip_file or not data: notify_data("Tiempo de espera agotado para recibir un mensaje","Error")
+            sender.close()
+            return data 
+
+def send_copy_db(conn,num_bytes = 1024):
+        f = open ("copia.db", "rb")
+        l = f.read(num_bytes)
+        while (l):
+            conn.send(l)
+            l = f.read(num_bytes)
+        os.remove("copia.db")
+
+def recieve_copy_db(conn,num_bytes = 1024):
+    data= False
+    f = open("copia.db",'wb') #open in binary     
+    # receive data and write it to file
+    l = conn.recv(num_bytes)                  
+    while (l):
+          data = True
+          f.write(l)
+          l = conn.recv(num_bytes)
+    f.close()
+    return data
+
+
+def convert_into_int(bytes_seq):
+    # decodifica los bytes en un entero con orden de byte 'big'
+    return int.from_bytes(bytes_seq, byteorder='big')
+
+def create_zip(zip_name,files_names):
+    # Crea un archivo ZIP llamado "datos.zip"
+    with zipfile.ZipFile(zip_name , "w") as mi_zip:
+    # Agrega subarchivos al archivo ZIP
+        for file in files_names:
+          mi_zip.write(file)
+
+def create_json_file(data,file_name):
+    json_data = json.dumps(data)
+
+    # Escribe la cadena JSON en un archivo llamado "datos.json"
+    with open(file_name, "w") as f:
+      f.write(json_data)
+
+
+def notify_data(data,data_type):
+	print(data_type + ": " + data)
+
+
+class Privacity(Enum):
+    Public = "Público"
+    Private = "Privado"
+
+class GType(Enum):
+    Hierarchical = "Jerárquico"
+    Non_hierarchical = "No Jerárquico"
+
+class State(Enum):
+    Asigned = "Asignado"
+    Pendient = "Pendiente"
+    Personal = "Personal"
+
+    
 class Client:
     
     def __init__(self, my_address):
@@ -62,21 +178,219 @@ class Client:
         else:
             return data
     
-    def create_account(self, user_key, user_name, last_name, password,address=None):
-        if not address: 
-            address = self.server_addr
-        self.user_key = hash_key(user_key)
-        name, last = self.check_account(self.user_key,address)
-        if not name:
-            data = {"message": CREATE_PROFILE, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": self.user_key, "user_name": user_name, "last_name": last_name, "password": password  }
-            print(f"Sending CREATE_PROFILE request to {str(address)}")
-            send_request(address,data=data)
-            return True
-        return False    
 
-    def get_account(self, user_key, password,address=None):
-        self.user_key = hash_key(user_key)
-        return self.check_account(self.user_key,address,password=password)
+
+################################### USERS ##########################################
+    def create_account(self, user_email, user_name, password, address=None):
+        if not address:
+            address = self.server_addr
+        self.user_key = hash_key(user_email)
+        if not self.check_account(self.user_key, address):
+            data = {
+                "message": CREATE_PROFILE,
+                "ip": self.addr.ip,
+                "port": self.addr.ports[0],
+                "user_key": self.user_key,
+                "user_name": user_name,
+                "user_email": user_email,
+                "password": password
+            }
+            print(f"Sending CREATE_PROFILE request to {str(address)}")
+            response = send_request(address, data=data)
+        return response
+    
+    def get_account(self, user_key, address=None, password=None):
+        if not address:
+            address = self.server_addr
+        request = GET_PROFILE
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_key,
+            "password": password,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_PROFILE request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response.get('user_name'), response.get('user_email')
+        return None, None
+
+    def check_account(self, user_key, address=None):
+        if not address:
+            address = self.server_addr
+        name, email = self.get_account(user_key, address)
+        return name is not None
+    
+    def get_user_by_email(self, user_email):
+        user_key = hash_key(user_email)
+        name, email = self.get_account(user_key)
+        if name:
+            return {"id": 1, "name": name, "email": email}
+        return None
+    
+    def delete_user(self, user_id):
+        request = DELETE_USER
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending DELETE_USER request to {str(self.server_addr)}")
+        response = send_request(self.server_addr, data=data)
+        if response:
+            return response
+        return None
+    
+    def get_events(self, user_id):
+        request = GET_EVENTS
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_EVENTS request to {str(self.server_addr)}")
+        response = send_request(self.server_addr, data=data)
+        if response:
+            return response.get("events", [])
+        return []
+    
+    def get_events_of(self, user_email):
+        user_key = hash_key(user_email)
+        return self.get_events(user_key)
+    
+    def delete_event(self, event_id, user_id):
+        request = DELETE_EVENT
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "id_event": event_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending DELETE_EVENT request to {str(self.server_addr)}")
+        response = send_request(self.server_addr, data=data)
+        if response:
+            return response
+        return None
+    
+    def update_event(self, event_id, new_description, new_start_time, new_end_time, new_state, user_id):
+        request = UPDATE_EVENT
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "id_event": event_id,
+            "new_description": new_description,
+            "new_start_time": new_start_time,
+            "new_end_time": new_end_time,
+            "new_state": new_state,
+            "sender_addr": self.addr
+        }
+        print(f"Sending UPDATE_EVENT request to {str(self.server_addr)}")
+        response = send_request(self.server_addr, data=data)
+        if response:
+            return response
+        return None
+    
+    def create_meeting(self, users_email, state, event_id, user_id, address=None):
+        if not address:
+            address = self.server_addr
+        data = {
+            "message": CREATE_MEETING,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "users_email": users_email,
+            "state": state,
+            "event_id": event_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending CREATE_MEETING request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+    
+    def get_meetings(self, user_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = GET_MEETINGS
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_MEETINGS request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response.get("meetings", [])
+        return []
+
+    def get_meeting_by_id(self, meeting_id, user_id):
+        if not address:
+            address = self.server_addr
+        request = GET_MEETING
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "meeting_id": meeting_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_MEETING_BY_ID request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+
+    def delete_meeting(self, meeting_id, user_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = DELETE_MEETING
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "meeting_id": meeting_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending DELETE_MEETING request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+
+    def update_meeting(self, meeting_id, new_event_id, new_state, user_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = UPDATE_MEETING
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "meeting_id": meeting_id,
+            "new_event_id": new_event_id,
+            "new_state": new_state,
+            "sender_addr": self.addr
+        }
+        print(f"Sending UPDATE_MEETING request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
     
     def create_group(self, group_name, group_type,address=None):
         if not address: address = self.server_addr
@@ -88,6 +402,222 @@ class Client:
         data = {"message": CREATE_GROUP, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": self.user_key, "id_group": id_group, "group_name": group_name, "group_type": group_type, "size": total   }
         print(f"Sending CREATE_GROUP request to {str(address)}")
         send_request(address,data=data)
+
+
+    def update_hierarchy_level(self, user_id, group_id, hierarchy, address=None):
+        if not address:
+            address = self.server_addr
+        request = UPDATE_HIERARCHY_LEVEL
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "group_id": group_id,
+            "hierarchy": hierarchy,
+            "sender_addr": self.addr
+        }
+        print(f"Sending UPDATE_HIERARCHY_LEVEL request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+    
+    def get_hierarchy_level(self, user_id, group_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = GET_HIERARCHY_LEVEL
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "group_id": group_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_HIERARCHY_LEVEL request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response.get("hierarchy_level")
+        return None
+
+    def add_user_to_group(self, user_id, group_id, hierarchy, address=None):
+        if not address:
+            address = self.server_addr
+        request = ADD_MEMBER_GROUP
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "group_id": group_id,
+            "hierarchy": hierarchy,
+            "sender_addr": self.addr
+        }
+        print(f"Sending ADD_USER_TO_GROUP request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+
+    def get_group_by_id(self, group_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = GET_GROUP
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "group_id": group_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_GROUP_BY_ID request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+    
+    def update_group(self, group_id, group_update, address=None):
+        if not address:
+            address = self.server_addr
+        request = UPDATE_GROUP
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "group_id": group_id,
+            "group_update": group_update,
+            "sender_addr": self.addr
+        }
+        print(f"Sending UPDATE_GROUP request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+
+    def delete_group(self, group_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = DELETE_GROUP
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "group_id": group_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending DELETE_GROUP request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+
+    def get_user_groups(self, user_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = GET_GROUPS
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_USER_GROUPS request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response.get("groups", [])
+        return []
+    
+    def remove_user_from_group(self, user_to_remove_id, group_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = DELETE_MEMBER_GROUP
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_to_remove_id,
+            "group_id": group_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending REMOVE_USER_FROM_GROUP request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+
+    def get_users_in_group(self, group_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = GET_GROUP
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "group_id": group_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_USERS_IN_GROUP request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response.get("users", [])
+        return []
+    
+    def get_events_in_group(self, group_id, user_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = GET_GROUP
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "group_id": group_id,
+            "user_key": user_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_EVENTS_IN_GROUP request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response.get("events", [])
+        return []
+
+    def create_group_meeting(self, users_email, state, event_id, user_id, group_id, address=None):
+        if not address:
+            address = self.server_addr
+        data = {
+            "message": CREATE_MEETING,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "users_email": users_email,
+            "state": state,
+            "event_id": event_id,
+            "group_id": group_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending CREATE_GROUP_MEETING request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response
+        return None
+    
+    def get_invited_groups(self, user_id, address=None):
+        if not address:
+            address = self.server_addr
+        request = GET_GROUPS
+        data = {
+            "message": request,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "user_key": user_id,
+            "sender_addr": self.addr
+        }
+        print(f"Sending GET_INVITED_GROUPS request to {str(address)}")
+        response = send_request(address, data=data)
+        if response:
+            return response.get("invited_groups", [])
+        return []
 
     def get_notifications(self,address=None):
         if not address: address = self.server_addr
@@ -104,7 +634,7 @@ class Client:
         print(f"Sending DELETE_NOTIFICATION request to {str(address)}")
         send_request(address,data=data)
 
-    def create_personal_event(self, user_key, event_name, date_initial, date_end, privacity=Privacity.Public.value, state=State.Personal.value, id_group=None, id_creator=None,id_event=None, total=None, address=None):
+    def create_event(self, user_key, event_name, date_initial, date_end, privacity=Privacity.Public.value, state=State.Personal.value , address=None):
         if not address: address = self.server_addr
         if id_event is None:
             _,_,_,_,_,_,_,_,sizes = self.get_all_events(user_key,address=address)
@@ -113,7 +643,7 @@ class Client:
             idcurrent = hash_key(f'{user}_{total}')
             id_event = str(idcurrent)
         data = {"message": CREATE_EVENT, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": user_key, "id_event" : id_event, "event_name": event_name, 
-                "date_initial": date_initial , "date_end": date_end, "visibility": privacity, "state": state, "group":id_group, "creator":id_creator, "size": total  }
+                "date_initial": date_initial , "date_end": date_end, "visibility": privacity, "state": state }
         print(f"Sending CREATE_EVENT request to {str(address)}")
         send_request(address,data=data)
     
@@ -145,14 +675,7 @@ class Client:
         data = self.recieve_data(request) 
         return data["id_event"],data["event_name"],data["date_ini"],data["date_end"],data["state"],data["visibility"],data["creator"],data["id_group"],data["size"]
 
-    def check_account(self,user_key,address,password = None):
-        if not address: address = self.server_addr
-        request = GET_PROFILE
-        data = {"message": request, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": user_key, "password": password, "sender_addr": self.addr  }
-        print(f"Sending GET_PROFILE request to {str(address)}")
-        send_request(address,data=data)
-        data = self.recieve_data(request)       
-        return data['user_name'], data['last_name']
+
 
     def delete_event(self, id_event,address=None):
         if not address: address = self.server_addr
@@ -175,7 +698,7 @@ class Client:
 
     def get_group_type(self, id_creator, id_group, address=None):
         if not address: address = self.server_addr
-        request = GET_GROUP_TYPE
+        request = GET_GROUP
         data = {"message": request, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": id_creator, "id_group": id_group, "sender_addr": self.addr  }
         print(f"Sending GET_GROUP_TYPE request to {str(address)}")
         send_request(address,data=data)
@@ -236,7 +759,7 @@ class Client:
 
     def get_inferior_members(self, id_creator, id_group,id_user,address=None):
         if not address: address = self.server_addr
-        request = GET_HIERARCHICAL_MEMBERS
+        request = GET_HIERARCHY_LEVEL
         data = {"message": request, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": id_creator, "id_group": id_group,"id_user": id_user, "sender_addr": self.addr  }
         print(f"Sending GET_HIERARCHICAL_MEMBERS request to {str(address)}")
         send_request(address,data=data)
