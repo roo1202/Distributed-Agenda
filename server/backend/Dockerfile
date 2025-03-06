@@ -7,19 +7,19 @@ RUN apt-get update && apt-get install -y \
     gcc \
     build-essential \
     iputils-ping \
-    iproute2 && \
-    rm -rf /var/lib/apt/lists/*
+    iproute2 
 
 
 # Establecer el directorio de trabajo
 WORKDIR /app
 
 # Copiar requirements.txt e instalar dependencias
-COPY requirements.txt .
+COPY /server/backend/requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el contenido de la carpeta app/ al WORKDIR (/app)
-COPY app/ .
+COPY /server/backend/app/ .
 
 # Variables de entorno requeridas
  ENV LOCAL_IP="" 

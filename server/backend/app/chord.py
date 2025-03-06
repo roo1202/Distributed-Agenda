@@ -35,7 +35,6 @@ class Address():
 def send_request(address,data=None,answer_requiered=False,expected_zip_file=False,num_bytes=1024):     
             sender = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try : 
-                print(address)
                 sender.connect(address)
             except ConnectionRefusedError as e :
                 sender.close()
@@ -69,25 +68,37 @@ def send_request(address,data=None,answer_requiered=False,expected_zip_file=Fals
             sender.close()
             return data 
 
-def send_copy_db(conn,num_bytes = 1024):
-        f = open ("copia.db", "rb")
-        l = f.read(num_bytes)
-        while (l):
-            conn.send(l)
-            l = f.read(num_bytes)
-        os.remove("copia.db")
 
-def recieve_copy_db(conn,num_bytes = 1024):
-    data= False
-    f = open("copia.db",'wb') #open in binary     
-    # receive data and write it to file
-    l = conn.recv(num_bytes)                  
-    while (l):
-          data = True
-          f.write(l)
-          l = conn.recv(num_bytes)
-    f.close()
-    return data
+def send_copy_db(conn, num_bytes=1024):
+    if not os.path.exists("copia.db"):
+        print("Error: copia.db no existe.")
+        return False 
+
+    try:
+        with open("copia.db", "rb") as f:
+            l = f.read(num_bytes)
+            while l:
+                conn.send(l)
+                l = f.read(num_bytes)
+        os.remove("copia.db")
+        return True  
+    except Exception as e:
+        print(f"Error al enviar copia.db: {e}")
+        return False
+
+def recieve_copy_db(conn, num_bytes=1024):
+    data = False
+    try:
+        with open("copia.db", 'wb') as f:
+            l = conn.recv(num_bytes)
+            while l:
+                data = True
+                f.write(l)
+                l = conn.recv(num_bytes)
+        return data  
+    except Exception as e:
+        print(f"Error al recibir copia.db: {e}")
+        return False
 
 
 def convert_into_int(bytes_seq):
@@ -110,16 +121,19 @@ def create_json_file(data,file_name):
 
 #region ChordNode
 class ChordNode:
-    def __init__(self,address:Address):
+    def __init__(self):
 
-        print(f'Iniciando nodo chord con ip: {address.ip}')
-        self.address=address
+        self.address=Address(socket.gethostbyname(socket.gethostname()), [CLIENT_PORT, SERVER_PORT, FILES_PORT, CHECK_PORT])
+        print(f'Iniciando nodo chord con ip: {self.address.ip}')
         self.leader = None
         self.nodeSet = []                           # Nodes discovered so far
+        self.time_nodes = {}
         self.database = {}
+        self.joined = False
 
         #Setting node ID
         self.nodeID = hash_key(self.address.ip) 
+        self.nodeSet.append(self.nodeID)
         self.db = DBModel(self.nodeID)
         self.nBits = 160
         self.Sucessors = [None,None]
@@ -155,29 +169,37 @@ class ChordNode:
         self.file_receiver.listen()
 
         #Puerto para chequeos
-        self.check_receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.check_receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.check_receiver.bind((HOST, CHECK_PORT))
-        self.check_receiver.listen()
+        # self.check_receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # self.check_receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # self.check_receiver.bind((HOST, CHECK_PORT))
+        # self.check_receiver.listen()
 
-        
-        self.join()
         
         # Registrar el servidor en el router multicast
-        self.register_with_multicast_router()
+        #self.register_with_multicast_router()
 
-        # Iniciar el hilo para manejar heartbeats
-        self.heartbeat_thread = threading.Thread(target=self.handle_heartbeat)
+        # Iniciar los hilos para mandar y manejar heartbeats
+        self.heartbeat_thread = threading.Thread(target=self.announce_availability)
         self.heartbeat_thread.daemon = True
         self.heartbeat_thread.start()
 
+        self.heartbeat_listener = threading.Thread(target=self.listen_heartbeats)
+        self.heartbeat_listener.daemon=True
+        self.heartbeat_listener.start()
+        print('Escuchando servidores disponibles')
+
+        time.sleep(10)
+        self.join()
+
+        # Hilo para limpiar nodos
+        self.cleanup_nodes_thread = threading.Thread(target=self.cleanup_nodes)
+        self.cleanup_nodes_thread.daemon =True
+        self.cleanup_nodes_thread.start()
+
+        # Hilo para el movimiento de la base de datos
         self.discover_resp_thread = threading.Thread(target=self.get_discover_request)
         self.discover_resp_thread.daemon = True
         self.discover_resp_thread.start()
- 
-        self.recieve_checks_thread = threading.Thread(target=self.recieve_checks)
-        self.recieve_checks_thread.daemon = True
-        self.recieve_checks_thread.start() 
 
         self.run()
 
@@ -208,6 +230,15 @@ class ChordNode:
     @property
     def Serialize_Address(self):
         return { node : (address.ip,address.ports) for node,address in self.node_address.items()}
+    
+    def announce_availability(self, multicast_group= MCAST_GRP, multicast_port= MCAST_PORT):
+        print("Announcing availability")
+        message = f"AVAILABLE:{self.nodeID}:{self.address.ip}:{self.address.ports}"
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+                s.sendto(message.encode(), (multicast_group, multicast_port))
+            time.sleep(5)
 
     #region register_with_router
     def register_with_multicast_router(self):
@@ -264,7 +295,7 @@ class ChordNode:
             if len(self.nodeSet) > 2 :
                 self.Sucessors[1] = self.FT[2]
             return 
-        if write_to_new_suc and self.Sucessors[0] != self.nodeID and self.Sucessors[1] != self.nodeID and (self.Sucessors[0] != self.FT[1] or self.Sucessors[1] != self.FT[2]):
+        if write_to_new_suc and len(self.nodeSet) > 2 and self.Sucessors[0] != self.nodeID and self.Sucessors[1] != self.nodeID and (self.Sucessors[0] != self.FT[1] or self.Sucessors[1] != self.FT[2]):
             self.Sucessors[0] = self.FT[1]
             self.Sucessors[1] = self.FT[2]
             self.send_data_to_sucessors()
@@ -286,12 +317,9 @@ class ChordNode:
     def recieve_checks(self):
         while True:
             conn, addr = self.check_receiver.accept()
-            print('accept')
             # conn es otro socket que representa la conexion 
             msg=conn.recv(1024)
-            print('recv')
             msg = msg.decode('utf-8')
-            print('decode')
             msg = json.loads(msg)         
             request = msg["message"]
             print(f'Recibido {msg} desde {addr}')
@@ -355,7 +383,7 @@ class ChordNode:
                 self.index_data(msg)                  
                 send_copy_db(conn,num_bytes=5120)
                 notify_data(f"Sending {response} to {node}","GetData")
-                if not get_data: 
+                if not get_data and len(self.nodeSet) > 2: 
                     if self.Sucessors[0] > msg["nodeID"]:
                         self.Sucessors[1] = self.Sucessors[0]
                         self.Sucessors[0] = msg["nodeID"]
@@ -363,23 +391,23 @@ class ChordNode:
                     else:
                         self.Sucessors[1]= msg["nodeID"]
                         self.node_address[self.Sucessors[1]] = Address(msg["ip"],msg["port"])
-                else: 
+                elif len(self.nodeSet) > 3: 
                     self.delete_rep_data(msg)  
 
-            if request == GET_NODES:
-                id = msg["nodeID"]
-                notify_data(f'Recieving GET_NODES request from {id}',"GetData")
-                addresses = self.Serialize_Address
-                data = {"message": SET_NODES,"ip": self.address.ip , "ports": self.address.ports , "nodeID": self.nodeID, "nodeSet":self.nodeSet, "addresses":addresses}
-                data = json.dumps(data).encode('utf-8')
-                conn.send(data)
+            # if request == GET_NODES:
+            #     id = msg["nodeID"]
+            #     notify_data(f'Recieving GET_NODES request from {id}',"GetData")
+            #     addresses = self.Serialize_Address
+            #     data = {"message": SET_NODES,"ip": self.address.ip , "ports": self.address.ports , "nodeID": self.nodeID, "nodeSet":self.nodeSet, "addresses":addresses}
+            #     data = json.dumps(data).encode('utf-8')
+            #     conn.send(data)
 
-            if request == SET_LEADER:
-                id = msg["nodeID"]
-                notify_data(f'Recieving SET_LEADER request from {id}',"Check")
-                addresses,self.nodeSet = self.discover_nodes(True)
-                self.node_address = self.get_addresses(addresses) 
-                self.recomputeFingerTable(write_to_new_suc = True)       
+            # if request == SET_LEADER:
+            #     id = msg["nodeID"]
+            #     notify_data(f'Recieving SET_LEADER request from {id}',"Check")
+            #     addresses,self.nodeSet = self.discover_nodes(True)
+            #     self.node_address = self.get_addresses(addresses) 
+            #     self.recomputeFingerTable(write_to_new_suc = True)       
 
             if request == DEL_REP_DATA:
                 id = msg["nodeID"]
@@ -392,7 +420,7 @@ class ChordNode:
         if msg:  
             start_index = msg["startID"] 
             end_index =   msg["endID"] 
-        print(start_index,end_index)
+        #print(start_index,end_index)
         condition = lambda id : self.inbetween(int(id),start_index,end_index)
         self.db.get_filtered_db(condition,'copia.db')
 
@@ -436,19 +464,26 @@ class ChordNode:
                 self.recomputeFingerTable(write_to_new_suc = True)
 
     #region check_sucessors
+    # def check_sucessors(self):
+    #     while True:
+    #       time.sleep(20)
+    #       for sucessor in self.Sucessors:
+    #         if sucessor and sucessor != self.nodeID:
+    #             data = {"message": CHECK_SUC, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
+    #             address = (self.node_address[sucessor].ip,CHECK_PORT)
+    #             notify_data(f"Sending CHECK_SUC to {sucessor}","Check")
+    #             data = send_request(address,data=data,answer_requiered=True)
+    #             notify_data(f'Recieving CHECK_SUC_RESP' ,"Check")
+    #             if not (data or self.leader == self.nodeID): 
+    #                 self.get_nodes()  
+
     def check_sucessors(self):
         while True:
-          time.sleep(20)
-          for sucessor in self.Sucessors:
-            if sucessor and sucessor != self.nodeID:
-                data = {"message": CHECK_SUC, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
-                address = (self.node_address[sucessor].ip,CHECK_PORT)
-                notify_data(f"Sending CHECK_SUC to {sucessor}","Check")
-                data = send_request(address,data=data,answer_requiered=True)
-                notify_data(f'Recieving CHECK_SUC_RESP' ,"Check")
-                if not (data or self.leader == self.nodeID): 
-                    self.get_nodes()  
-            
+            time.sleep(20)
+            for i,sucessor in enumerate(self.Sucessors):
+                if sucessor is not None and sucessor != self.nodeID and sucessor != self.nodeSet[self.nodeSet.index(self.nodeID) + i + 1] :
+                    self.recomputeFingerTable(write_to_new_suc = True)
+                    
     def send_data_to_sucessors(self):
         notify_data(f"New sucessors found {self.Sucessors[0]}, {self.Sucessors[1]}","Join")
         self.index_data(False)
@@ -473,6 +508,44 @@ class ChordNode:
                 notify_data(f"Nodes set already update","Check")
                 notify_data(f"Nodes {self.node_address}","Join")
             time.sleep(30)
+
+#region listen_heartbeats
+    def listen_heartbeats(self):
+        """Escucha mensajes multicast de otros servidores."""
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((MCAST_GRP, MCAST_PORT))
+            s.setsockopt(
+                socket.IPPROTO_IP,
+                socket.IP_ADD_MEMBERSHIP,
+                socket.inet_aton(MCAST_GRP) + socket.inet_aton("0.0.0.0"),
+            )
+            while True:
+                data, _ = s.recvfrom(4096)
+                message = data.decode()
+                if message.startswith("AVAILABLE"):
+                    _, node_id, ip, ports = message.split(":")
+                    node_id = int(node_id)
+                    if node_id not in self.nodeSet:
+                        self.joined = True
+                        self.nodeSet.append(node_id)
+                        self.node_address[node_id] = Address(ip, ports.split(","))
+                    self.time_nodes[node_id] = time.time()
+
+
+    def cleanup_nodes(self):
+        """Elimina nodos inactivos de la lista."""
+        while True:
+            current_time = time.time()
+            to_remove = [
+                node_id
+                for node_id, last_seen in self.time_nodes.items()
+                if current_time - last_seen > NODE_TIMEOUT
+            ]
+            for node_id in to_remove:
+                self.nodeSet.remove(node_id)
+                del self.time_nodes[node_id]
+            time.sleep(10)
 
     #region check_network
     def check_network(self):
@@ -507,7 +580,6 @@ class ChordNode:
         #Receiving requests
         while True:
             print("next_step")
-            
             print(f"My address: {str(self.address)}")
             conn, addr = self.receiver.accept()
             msg=conn.recv(1024)
@@ -522,36 +594,28 @@ class ChordNode:
                 break
             elif request in self.Req_Method.keys():
                 notify_data(f"Receiving {request} from {addr}","SetData")
-                if 30 <= int(request) < 60:
-                    if not self.leader == self.nodeID: 
-                        self.get_nodes()   
+                if 30 <= int(request) < 60:  
                     if int(request)%2 == 0 :
                         self.update_key(data,request,addr)
                     else: 
                         self.Req_Method[request](data)
                         self.db.check_db()
                 if 60 <= int(request) < 80:
-                   if not self.leader == self.nodeID: 
-                       self.get_nodes()
                    self.get_key(data,request)
 
             elif request == LOOKUP_REQ: 
-              if not self.leader == self.nodeID:
-                self.get_nodes()                  # A lookup request #-
-              self.lookup_key(data)               
+            #   if not self.leader == self.nodeID:
+            #     self.get_nodes()                  
+                self.lookup_key(data)               
 
             elif request == SET_DATA_REQ:
                p = data["port"]
                print(self.address.ports[0])
-               notify_data(f"Receiving SET_DATA_REQ from {p}","GetData")
-               if not self.leader == self.nodeID: 
-                   self.get_nodes()                
+               notify_data(f"Receiving SET_DATA_REQ from {p}","GetData")                
                self.update_key(data) 
 
             elif request == GET_DATA_REQ:
                notify_data(f"Receiving GET_DATA_REQ","GetData")
-               if not self.leader == self.nodeID: 
-                   self.get_nodes()
                self.get_key(data,addr)
 
     #region lookup_key   
@@ -570,7 +634,7 @@ class ChordNode:
                     send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
                     notify_data(f"Sending LOOKUP_REQ to {nextID} node ","Get_Data")
                 else:
-                    data = {"message": LOOKUP_REP, "ip": self.address.ip , "port": self.address.ports[0], "node":  nextID,"key":key}        
+                    data = {"message": LOOKUP_REP, "ip": self.address.ip , "port": CLIENT_PORT, "node":  nextID,"key":key}        
                     send_request((ip,int(port)),data=data)               
 
     def update_key(self,data,request,addr):
@@ -624,12 +688,12 @@ class ChordNode:
     #region join
     def join(self):
 
-        addresses,self.nodeSet = self.discover_nodes(False)
-        notify_data("Discovered nodes %s" % (self.nodeSet),"Join")
-
+        # addresses,self.nodeSet = self.discover_nodes(False)
+        # notify_data("Discovered nodes %s" % (self.nodeSet),"Join"
         #building node_address dict
-        self.node_address = self.get_addresses(addresses)
-        
+        #self.node_address = self.get_addresses(addresses)
+
+        print(f'Uniendome a una red de {len(self.nodeSet) - 1} servidores')
         #Computing Finger Table
         self.recomputeFingerTable()
 
@@ -640,12 +704,28 @@ class ChordNode:
         elif len(self.nodeSet) > 1 :
             notify_data(f"Connecting to node {self.Sucessors[0]}","GetData")
             address = (self.node_address[self.Sucessors[0]].ip,SERVER_PORT)
-            self.index_data()
-            send_request(address, answer_requiered=True)
+            data = {"nodeID":self.nodeID,
+                    "message": REP_DATA_REQ,
+                    "startID": 0,
+                    "endID": self.MAXPROC,
+                    "ip": self.address.ip,
+                    "port": self.address.ports[1]}
+            send_request(address, data, answer_requiered=True, expected_zip_file=True)
             self.initialize_data('copia.db')
             notify_data(f"Data updated","database")
             self.db.check_db()
             os.remove('copia.db')
+            if len(self.nodeSet) == 3 :
+                address = (self.node_address[self.Sucessors[1]].ip,SERVER_PORT)
+                send_request(address, data, answer_requiered=True, expected_zip_file=True)
+                self.db.replicate_db('copia.db')
+                notify_data(f"Data updated","database")
+                self.db.check_db()
+                os.remove('copia.db')
+        else:
+            print("[+] Primer nodo del anillo.")
+            self.joined = True
+            return
 
         self.recieve_files_thread =  threading.Thread(target=self.recieve_files)
         self.recieve_files_thread.daemon = True
@@ -723,12 +803,15 @@ class ChordNode:
             servers = self.discover_servers()
             print(servers)
             if len(servers) > 0 :
-                possible_addresses = [Address(servers[0], [CHECK_PORT])] 
+                s1 = servers[0]
+                print(f's1[0]: {s1[0]}')
+                print(f's1[1]: {s1[1]}')
+                possible_addresses = [Address(s1[0], [CHECK_PORT])] 
         else :
             possible_addresses = [address for _, address in self.node_address.items()]
         for address in possible_addresses:
             data = {"message": msg_to_send, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
-            data = send_request((address.ip, CHECK_PORT),data=data,answer_requiered=True)
+            data = send_request((address.ip, int(CHECK_PORT)),data=data,answer_requiered=True)
             if data:
                 if data["message"] == msg_to_rcv:
                     current_id = data["nodeID"]

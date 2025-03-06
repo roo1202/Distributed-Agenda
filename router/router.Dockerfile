@@ -1,17 +1,9 @@
-# Usamos una imagen base de Python con Slim para reducir tamaño
-FROM python:3.9-slim
+from router:base
 
-# Instalamos dependencias del sistema necesarias
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    hostname \
-    && rm -rf /var/lib/apt/lists/*
+copy route.sh /root/route.sh
 
-# Copiamos el archivo de la aplicación
-COPY multicast_proxy.py .
+copy multicast_proxy.py /root/multicast_proxy.py
 
-# Exponemos los puertos necesarios (UDP)
-EXPOSE 10000/udp 10001/udp 10002/udp 10003/udp 10004/udp
+run chmod +x /root/route.sh
 
-# Comando para ejecutar la aplicación
-#CMD ["python", "multicast_proxy.py"]
-CMD ["sh", "-c", "tail -f /dev/null"]
+entrypoint /root/route.sh

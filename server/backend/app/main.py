@@ -9,22 +9,10 @@ from contants import *
 from chord import Address, ChordNode
 
 def main():
-    print("¡Hola desde main")
-    if len(sys.argv) < 1:
-        print("Uso: python main.py <local_ip>")
-        sys.exit(1)
-
-    # Obtener la IP y los puertos de los argumentos de la línea de comandos
-    ip = sys.argv[1]
-    local_ip = ip
-
-    # Crear una instancia de Address con la IP y los puertos
-    address = Address(ip, [SERVER_PORT])
-
     # Crear una instancia de ChordNode
-    node = ChordNode(address)  
+    node = ChordNode()  
 
-    threading.Thread(target=multicast_listener(local_ip), daemon=True).start()
+    #threading.Thread(target=multicast_listener(local_ip), daemon=True).start()
 
     # Mantener el servidor en ejecución
     try:

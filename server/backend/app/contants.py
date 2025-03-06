@@ -72,6 +72,7 @@ GET_GROUP_TYPE_RESP = '79'
 
 MCAST_GRP = "224.0.0.1"
 MCAST_PORT = 10003
+NODE_TIMEOUT = 10
 
 # Host y puertos
 HOST = "0.0.0.0"

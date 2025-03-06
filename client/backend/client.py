@@ -63,46 +63,6 @@ def send_request(address,data=None,answer_requiered=False,expected_zip_file=Fals
             sender.close()
             return data 
 
-def send_copy_db(conn,num_bytes = 1024):
-        f = open ("copia.db", "rb")
-        l = f.read(num_bytes)
-        while (l):
-            conn.send(l)
-            l = f.read(num_bytes)
-        os.remove("copia.db")
-
-def recieve_copy_db(conn,num_bytes = 1024):
-    data= False
-    f = open("copia.db",'wb') #open in binary     
-    # receive data and write it to file
-    l = conn.recv(num_bytes)                  
-    while (l):
-          data = True
-          f.write(l)
-          l = conn.recv(num_bytes)
-    f.close()
-    return data
-
-
-def convert_into_int(bytes_seq):
-    # decodifica los bytes en un entero con orden de byte 'big'
-    return int.from_bytes(bytes_seq, byteorder='big')
-
-def create_zip(zip_name,files_names):
-    # Crea un archivo ZIP llamado "datos.zip"
-    with zipfile.ZipFile(zip_name , "w") as mi_zip:
-    # Agrega subarchivos al archivo ZIP
-        for file in files_names:
-          mi_zip.write(file)
-
-def create_json_file(data,file_name):
-    json_data = json.dumps(data)
-
-    # Escribe la cadena JSON en un archivo llamado "datos.json"
-    with open(file_name, "w") as f:
-      f.write(json_data)
-
-
 def notify_data(data,data_type):
 	print(data_type + ": " + data)
 
@@ -128,9 +88,10 @@ class Client:
         self.receiver.bind(my_address)
         self.receiver.listen()
         self.addr: Address = my_address
+        self.servers = {}
 
         # Descubrir un servidor al iniciar
-        discovered_server = self.discover_server()
+        discovered_server = self.discover_servers()
         if discovered_server:
             self.server_addr = Address(discovered_server[0], [discovered_server[1]])
             print(f"Connected to server {self.server_addr}")
@@ -138,33 +99,20 @@ class Client:
             raise ConnectionError("No available Chord servers found!")
 
 
-    def discover_server(self):
-        """ Envía una solicitud multicast para obtener un servidor disponible. """
-        multicast_group = (MCAST_GRP, MCAST_PORT)
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        # Configurar el tiempo de espera para no bloquear indefinidamente
-        sock.settimeout(2)
-
-        try:
-            # Enviar solicitud al grupo multicast
-            message = "DISCOVER"
-            sock.sendto(message.encode(), multicast_group)
-
-            # Esperar respuesta
-            data, server = sock.recvfrom(1024)
-            server_ip, server_port = data.decode().split(":")
-            print(f"Discovered server: {server_ip}:{server_port}")
-            return server_ip, int(server_port)
-
-        except socket.timeout:
-            print("No response from multicast router")
-            return None
-
-        finally:
-            sock.close()
+    def discover_servers(self):
+        multicast_group = (MCAST_GRP,MCAST_PORT)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(multicast_group)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, 
+                        socket.inet_aton(multicast_group[0]) + socket.inet_aton('0.0.0.0'))
+            while True:
+                data, _ = s.recvfrom(4096)
+                message = data.decode()
+                if message.startswith("AVAILABLE"):
+                    _, node_id, ip, ports = message.split(':')
+                    self.servers[node_id] = (ip, int(ports[0]))
+                    print(f"Discovered server {node_id} at {ip}:{ports[0]}")
 
    
     def recieve_data(self,request):

@@ -1,14 +1,11 @@
-from .group import Group
-from .meeting import Meeting
-from sqlalchemy.orm import Session
 from services.user_service import *
 from services.meeting_service import *
 from services.group_service import *
 from services.event_service import *
 
-from sqlalchemy import Enum, create_engine
-from sqlalchemy.orm import sessionmaker
-from db.base import Base
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Boolean, Table, UniqueConstraint, Enum
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session, relationship
 
 def notify_data(data,data_type):
 	print(data_type + ": " + data)
@@ -27,149 +24,132 @@ class State(Enum):
     Pendient = "Pendiente"
     Personal = "Personal"
 
+
+Base = declarative_base()
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    text = Column(String, nullable=False)
+    time = Column(DateTime, nullable=False)
+    user = relationship("User", back_populates="notifications")  
+    
+    __table_args__ = (UniqueConstraint('user_id', 'id'),)
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    groups = relationship("Group", secondary='group_user_association', back_populates="users")
+    meetings = relationship("Meeting", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
+
+association_table = Table(
+    'group_user_association',
+    Base.metadata,
+    Column('group_id', Integer, ForeignKey('groups.id')),
+    Column('user_id', Integer, ForeignKey('users.id')),
+    Column('hierarchy_level', Integer)
+)
+
+class Group(Base):
+    __tablename__ = "groups"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    hierarchy = Column(Boolean)
+    creator = Column(Integer, nullable=False)
+    users = relationship("User", secondary=association_table, back_populates="groups")
+
+class Event(Base):
+    __tablename__ = "events"
+    id = Column(Integer, primary_key=True, index=True)
+    description = Column(String, index=True)
+    start_time = Column(DateTime)
+    end_time = Column(DateTime)
+    state = Column(String)
+    visibility = Column(String)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    meetings = relationship("Meeting", back_populates="event")
+
+class Meeting(Base):
+    __tablename__ = "meetings"
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey('events.id'), index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), index=True)
+    state = Column(String)
+    event = relationship("Event", back_populates="meetings")
+    user = relationship("User", back_populates="meetings")
+
 class DBModel:
     def __init__(self, id: int):
-        # Creamos la URL de conexión de SQLAlchemy
         self.db_name = f"{id}.db"
         self.db_url = f"sqlite:///{self.db_name}"
-
-        self.engine = create_engine(self.db_url, echo=False) 
+        self.classes = [User, Group, Event, Meeting, Notification]
+        
+        self.engine = create_engine(self.db_url, echo=False)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-
+        
         Base.metadata.create_all(self.engine)
 
-
     def get_session(self) -> Session:
-        """Devuelve una sesión nueva para interactuar con la base de datos."""
         return self.SessionLocal()
 
     def filter_function(self, condition, cls):
-        """
-        Devuelve una función que, dado un objeto 'row', verifique
-        si 'row.user' o 'row.creator' cumple la condición.
-        """
         def cond(row):
-            key = row.user if cls != Group else row.creator 
+            if cls == Group:
+                key = row.creator
+            elif cls == User:
+                key = row.id
+            else:  # Event, Meeting, Notification
+                key = row.user_id
             return condition(int(key))
-        return cond 
-    
+        return cond
+
     def get_filtered_db(self, condition, new_db_name):
-        """
-        1) Lee todos los registros de la base de datos actual.
-        2) Crea otra base de datos (SQLite) con nombre `new_db_name`.
-        3) Copia únicamente aquellos registros cuyo 'user' o 'creator' cumplan con 'condition'.
-        """
-        old_session = self.SessionLocal()
-        registers = {}
-        for cls in self.classes:
-            registers[cls] = old_session.query(cls).all()
-        old_session.close()
+        with self.get_session() as session:
+            registers = {cls: session.query(cls).all() for cls in self.classes}
 
         engine_copia = create_engine(f"sqlite:///{new_db_name}", echo=False)
-        SessionCopia = sessionmaker(bind=engine_copia, autoflush=False, autocommit=False)
-        session_copia = SessionCopia()
-
         Base.metadata.create_all(engine_copia)
-
-        for cls in self.classes:
-            for origen_row in registers[cls]:
-                if (cls != Group and condition(origen_row.user)) or (cls == Group and condition(origen_row.creator)):
-                    data = {
-                        col.name: getattr(origen_row, col.name) 
-                        for col in cls.__table__.columns
-                    }
-                    dest_row = cls(**data)
-                    session_copia.add(dest_row)
-
-        session_copia.commit()
-        session_copia.close()
-        engine_copia.dispose()
+        
+        with sessionmaker(bind=engine_copia)() as session_copia:
+            for cls in self.classes:
+                filter_cond = self.filter_function(condition, cls)
+                for row in registers[cls]:
+                    if filter_cond(row):
+                        session_copia.merge(cls(**{c.name: getattr(row, c.name) for c in cls.__table__.c}))
+            session_copia.commit()
 
     def replicate_db(self, db_name):
-        """
-        Copia todos los registros de 'db_name' (otra base de datos) a la base de datos actual.
-        """
         engine_origen = create_engine(f"sqlite:///{db_name}", echo=False)
-        SessionOrigen = sessionmaker(bind=engine_origen, autoflush=False, autocommit=False)
-        session_origen = SessionOrigen()
+        with sessionmaker(bind=engine_origen)() as session_origen:
+            registers = {cls: session_origen.query(cls).all() for cls in self.classes}
 
-        registers = {}
-        for cls in self.classes:
-            registers[cls] = session_origen.query(cls).all()
-        session_origen.close()
-        engine_origen.dispose()
-
-        session_actual = self.SessionLocal()
-        for cls in self.classes:
-            for row in registers[cls]:
-                data = {
-                    col.name: getattr(row, col.name)
-                    for col in cls.__table__.columns
-                }
-                new_row = cls(**data)
-                session_actual.add(new_row)
-        
-        session_actual.commit()
-        session_actual.close()
-
+        with self.get_session() as session_actual:
+            for cls in self.classes:
+                for row in registers[cls]:
+                    session_actual.merge(cls(**{c.name: getattr(row, c.name) for c in cls.__table__.c}))
+            session_actual.commit()
 
     def check_db(self):
-        """
-        Lee los datos de cada tabla y los imprime. Luego invoca notify_data()
-        para informar qué datos se han consultado.
-        """
-        session = self.SessionLocal()
-        registers = []
-        for cls in self.classes:
-            rows = session.query(cls).all()
-            registers.append(rows)
-
-        notify_data("Users", "GetData")
-        for row in registers[0]:
-            print(row.user, row.name, row.last, row.passw)
-
-        notify_data("Notifications", "GetData")
-        for row in registers[1]:
-            print(row.user, row.notif, row.text)
-
-        notify_data("Groups", "GetData")
-        for row in registers[2]:
-            print(row.creator, row.group, row.gname, row.gtype)
-
-        notify_data("User-Group", "GetData")
-        for row in registers[3]:
-            print(row.user, row.group, row.ref)
-
-        notify_data("Meetings", "GetData")
-        for row in registers[4]:
-            print(row.group, row.user, row.role, row.level)
-
-        notify_data("Events", "GetData")
-        for row in registers[5]:
-            print(row.user, row.event, row.ename, row.datec, row.datef, row.state, row.visib, row.creator, row.group)
-
-        session.close()
-
+        with self.get_session() as session:
+            for cls in self.classes:
+                notify_data(cls.__name__, "GetData")
+                for row in session.query(cls).all():
+                    print(f"{cls.__name__}: {row.__dict__}")
 
     def delete_replicated_db(self, condition):
-        """
-        Elimina de la base actual todos los registros que cumplan la condición:
-            - Si cls != Group: condition(row.user)
-            - Si cls == Group: condition(row.creator)
-        """
-        session = self.SessionLocal()
-        for cls in self.classes:
-            rows = session.query(cls).all()
-            for origen_row in rows:
-                if (cls != Group and condition(origen_row.user)) or (cls == Group and condition(origen_row.creator)):
-                    session.delete(origen_row)
-
-        session.commit()
-        session.close()
-
-        notify_data("Replicated data deleted.", 'database')      
-        
-        session.close()
+        with self.get_session() as session:
+            for cls in self.classes:
+                filter_cond = self.filter_function(condition, cls)
+                for row in session.query(cls).all():
+                    if filter_cond(row):
+                        session.delete(row)
+            session.commit()
+            notify_data("Replicated data deleted.", 'database')
 
 
     # Metodos para el manejo de la base de datos 

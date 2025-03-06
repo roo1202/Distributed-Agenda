@@ -85,23 +85,25 @@ networks:
         - subnet: 192.168.2.0/24
 
 services:
-  router:
-    image: router-image
-    container_name: router
-    networks:
-      server_network:
-        ipv4_address: 192.168.1.100
-      client_network:
-        ipv4_address: 192.168.2.100
-    cap_add:
-      - NET_ADMIN
-    privileged: true
-    sysctls:
-      net.ipv4.ip_forward: 1
-    stdin_open: true
-    tty: true
-    dns:
-      - 192.168.1.10
+  # router:
+  #   image: router-image
+  #   container_name: router
+  #   volumes:
+  #     - ./router:/app
+  #   networks:
+  #     server_network:
+  #       ipv4_address: 192.168.1.100
+  #     client_network:
+  #       ipv4_address: 192.168.2.100
+  #   cap_add:
+  #     - NET_ADMIN
+  #   privileged: true
+  #   sysctls:
+  #     net.ipv4.ip_forward: 1
+  #   stdin_open: true
+  #   tty: true
+  #   dns:
+  #     - 192.168.1.10
 
   server1:
     build:
