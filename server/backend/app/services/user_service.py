@@ -1,3 +1,4 @@
+import hashlib
 from sqlalchemy.orm import Session
 from models.user import User
 from models.notification import Notification
@@ -12,11 +13,18 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
+def hash_key(key: str) -> int:
+    """
+    Función de hash que calcula el hash SHA-1 de una cadena de caracteres y devuelve un número entero que se utiliza como la clave del nodo en la red Chord.
+    """
+    sha1 = hashlib.sha1(key.encode('utf-8'))
+    hash_value = int(sha1.hexdigest(), 16) 
+    return hash_value
 
 # Crear un nuevo usuario
 def create_user(db: Session, name: str, email: str, password: str):
     hashed_password = get_password_hash(password)
-    new_user = User(name=name, email=email, hashed_password=hashed_password)
+    new_user = User(id=hash_key(email) ,name=name, email=email, hashed_password=hashed_password)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)

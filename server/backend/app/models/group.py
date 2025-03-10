@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Boolean, String
+from sqlalchemy import Column, Integer, Boolean, String, BigInteger
 from db.base import Base
 from sqlalchemy.orm import relationship
 from .group_user_association import association_table
@@ -8,7 +8,7 @@ class Group(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     hierarchy = Column(Boolean)
-    creator = Column(Integer, nullable=False)
+    creator = Column(BigInteger, nullable=False)
     users = relationship("User", secondary=association_table, back_populates="groups")
 
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, DateTime, BigInteger
 from db.base import Base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -11,6 +11,6 @@ class Event(Base):
     end_time = Column(DateTime)
     state = Column(String)
     visibility = Column(String)
-    user_id = Column(Integer, ForeignKey('users.id'))
+    user_id = Column(BigInteger, ForeignKey('users.id'))
 
     meetings = relationship("Meeting", back_populates="event")

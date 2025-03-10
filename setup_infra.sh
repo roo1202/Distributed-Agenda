@@ -73,3 +73,6 @@ echo "Server2 created."
 
 docker run --rm -d --network servers  --name server3 --cap-add NET_ADMIN -p 65446:65435 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
 echo "Server3 created."
+
+docker run --rm -d --network clients  --name client1 --cap-add NET_ADMIN -p 8080:3000 -v C:\Roger\feo\Distributed-Agenda\client:/app client
+echo Client1 created.

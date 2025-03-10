@@ -73,3 +73,9 @@ echo Server2 created.
 
 docker run --rm -d --network servers  --name server3 --cap-add NET_ADMIN -p 65446:65435 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
 echo Server3 created.
+
+docker run --rm -d --network servers  --name server4 --cap-add NET_ADMIN -p 65447:65436 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+echo Server4 created.
+
+docker run --rm -d --network servers  --name server5 --cap-add NET_ADMIN -p 65448:65437 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+echo Server5 created.

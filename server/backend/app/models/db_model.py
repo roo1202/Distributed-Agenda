@@ -1,9 +1,10 @@
+import os
 from services.user_service import *
 from services.meeting_service import *
 from services.group_service import *
 from services.event_service import *
 
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Boolean, Table, UniqueConstraint, Enum
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Boolean, Table, UniqueConstraint, Enum, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 
@@ -30,7 +31,7 @@ Base = declarative_base()
 class Notification(Base):
     __tablename__ = "notifications"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(BigInteger, ForeignKey('users.id'), nullable=False)
     text = Column(String, nullable=False)
     time = Column(DateTime, nullable=False)
     user = relationship("User", back_populates="notifications")  
@@ -39,7 +40,7 @@ class Notification(Base):
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(BigInteger, primary_key=True, index=True)
     name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
@@ -51,7 +52,7 @@ association_table = Table(
     'group_user_association',
     Base.metadata,
     Column('group_id', Integer, ForeignKey('groups.id')),
-    Column('user_id', Integer, ForeignKey('users.id')),
+    Column('user_id', BigInteger, ForeignKey('users.id')),
     Column('hierarchy_level', Integer)
 )
 
@@ -60,7 +61,7 @@ class Group(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     hierarchy = Column(Boolean)
-    creator = Column(Integer, nullable=False)
+    creator = Column(BigInteger, nullable=False)
     users = relationship("User", secondary=association_table, back_populates="groups")
 
 class Event(Base):
@@ -71,14 +72,14 @@ class Event(Base):
     end_time = Column(DateTime)
     state = Column(String)
     visibility = Column(String)
-    user_id = Column(Integer, ForeignKey('users.id'))
+    user_id = Column(BigInteger, ForeignKey('users.id'))
     meetings = relationship("Meeting", back_populates="event")
 
 class Meeting(Base):
     __tablename__ = "meetings"
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(Integer, ForeignKey('events.id'), index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), index=True)
+    user_id = Column(BigInteger, ForeignKey('users.id'), index=True)
     state = Column(String)
     event = relationship("Event", back_populates="meetings")
     user = relationship("User", back_populates="meetings")
@@ -88,11 +89,21 @@ class DBModel:
         self.db_name = f"{id}.db"
         self.db_url = f"sqlite:///{self.db_name}"
         self.classes = [User, Group, Event, Meeting, Notification]
+
+        # Verificar si la base de datos ya existe y eliminarla
+        if os.path.exists(self.db_name):
+            os.remove(self.db_name)
+            print(f"Base de datos existente '{self.db_name}' eliminada.")
+
+        # Verificar si hay copias de bases de datos ya existentes y eliminarlas
+        if os.path.exists('copia'+ self.db_name):
+            os.remove('copia' + self.db_name)
+            print(f"Base de datos existente '{'copia' + self.db_name}' eliminada.")
         
         self.engine = create_engine(self.db_url, echo=False)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         
-        Base.metadata.create_all(self.engine)
+        Base.metadata.create_all(bind=self.engine)
 
     def get_session(self) -> Session:
         return self.SessionLocal()

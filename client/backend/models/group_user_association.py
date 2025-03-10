@@ -1,5 +1,6 @@
 from sqlalchemy import Table, Column, Integer, ForeignKey, Boolean, String
-from db.base import Base
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 
 association_table = Table(
     'group_user_association',

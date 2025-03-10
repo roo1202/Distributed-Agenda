@@ -1,34 +1,36 @@
-
-FROM node:16-alpine as frontend-builder
-
-WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm cache clean --force && \
-    rm -rf node_modules package-lock.json && \
-    npm install && \
-    npm install @rollup/rollup-linux-x64-gnu --save-optional
-COPY frontend/ .
-RUN npm run build
-
-# ------------------------
-
 FROM python:3.9-slim
 
-RUN apt-get update && apt-get install -y npm && \
-    npm install -g http-server && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    net-tools \
+    gcc \
+    build-essential \
+    iputils-ping \
+    iproute2 
 
-WORKDIR /app/backend
+# Establecer el directorio de trabajo
 
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
 
-COPY --from=frontend-builder /app/dist /app/frontend/dist
+# Copiar requirements.txt e instalar dependencias
+COPY /client/backend/requirements.txt ./backend/
 
-COPY backend/ .
+RUN pip install --no-cache-dir -r backend/requirements.txt
 
-ENV FRONTEND_PORT=8080 BACKEND_PORT=8000
+# Copiar el contenido de la carpeta app/ al WORKDIR (/app)
+COPY /client/backend .
 
-EXPOSE ${FRONTEND_PORT} ${BACKEND_PORT}
+FROM node:20-alpine
 
-CMD ["sh", "-c", "python main.py --port $BACKEND_PORT & http-server /app/frontend/dist -p $FRONTEND_PORT"]
+# Copiar solo los archivos necesarios para instalar dependencias
+COPY /client/frontend .
+
+# Instalar las dependencias
+#RUN npm cache clean --force && rm -rf /frontend/node_modules /frontend/package-lock.json && npm install && npm install @rollup/rollup-linux-x64-gnu --save-optional
+
+# Exponer el puerto donde corre Nuxt
+EXPOSE 3000
+
+# Ejecutar Nuxt
+#CMD ["npm", "run", "dev"]
+
+CMD ["sh", "-c", "tail -f /dev/null"]

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class GroupBase(BaseModel):
     name: str
     hierarchy: bool

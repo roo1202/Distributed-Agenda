@@ -10,6 +10,7 @@ import time
 import zipfile
 from models.db_model import DBModel, notify_data
 from contants import *
+import struct
 
 def hash_key(key: str) -> int:
     """
@@ -30,75 +31,6 @@ class Address():
     
     def __repr__(self):
         return f"ip:{self.ip} ports:{self.ports}"
-    
-#region send_request
-def send_request(address,data=None,answer_requiered=False,expected_zip_file=False,num_bytes=1024):     
-            sender = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try : 
-                sender.connect(address)
-            except ConnectionRefusedError as e :
-                sender.close()
-                return None
-                #print("Error de conexion :", e)
-                
-            # establecer un tiempo de espera de 10 segundos
-            print(f'mandando mensaje a {address} con data {data}')
-            sender.settimeout(10)
-            if data is not None :
-                json_data = json.dumps(data).encode('utf-8')
-                sender.send(json_data)
-            else: 
-                send_copy_db(sender,num_bytes)
-
-            if answer_requiered:
-              try:
-                # Esperar la llegada de un mensaje
-                
-                if not expected_zip_file:
-                  data = sender.recv(num_bytes)
-                  data = data.decode('utf-8')
-                  data = json.loads(data) 
-                  print(f'data recibida {data}')
-                  sender.close()
-                else:
-                    data = recieve_copy_db(sender,num_bytes)
-              except socket.timeout:
-                # Manejar la excepción si se agotó el tiempo de espera
-                if not expected_zip_file or not data: notify_data("Tiempo de espera agotado para recibir un mensaje","Error")
-            sender.close()
-            return data 
-
-
-def send_copy_db(conn, num_bytes=1024):
-    if not os.path.exists("copia.db"):
-        print("Error: copia.db no existe.")
-        return False 
-
-    try:
-        with open("copia.db", "rb") as f:
-            l = f.read(num_bytes)
-            while l:
-                conn.send(l)
-                l = f.read(num_bytes)
-        os.remove("copia.db")
-        return True  
-    except Exception as e:
-        print(f"Error al enviar copia.db: {e}")
-        return False
-
-def recieve_copy_db(conn, num_bytes=1024):
-    data = False
-    try:
-        with open("copia.db", 'wb') as f:
-            l = conn.recv(num_bytes)
-            while l:
-                data = True
-                f.write(l)
-                l = conn.recv(num_bytes)
-        return data  
-    except Exception as e:
-        print(f"Error al recibir copia.db: {e}")
-        return False
 
 
 def convert_into_int(bytes_seq):
@@ -135,6 +67,9 @@ class ChordNode:
         self.nodeID = hash_key(self.address.ip) 
         self.nodeSet.append(self.nodeID)
         self.db = DBModel(self.nodeID)
+        self.db.create_user({"user_name": 'roger',
+                             "user_email": 'fuentesroger65@gmail.com',
+                             "password":'1234'})
         self.nBits = 160
         self.Sucessors = [None,None]
         
@@ -188,7 +123,7 @@ class ChordNode:
         self.heartbeat_listener.start()
         print('Escuchando servidores disponibles')
 
-        time.sleep(10)
+        time.sleep(5)
         self.join()
 
         # Hilo para limpiar nodos
@@ -203,7 +138,93 @@ class ChordNode:
 
         self.run()
 
-    
+        
+    #region send_request
+    def send_request(self, address,data=None,answer_requiered=False,expected_zip_file=False,num_bytes=1024):     
+                sender = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                try : 
+                    sender.connect(address)
+                except ConnectionRefusedError as e :
+                    sender.close()
+                    return None
+                    #print("Error de conexion :", e)
+                    
+                # establecer un tiempo de espera de 10 segundos
+                print(f'mandando mensaje a {address} con data {data}')
+                sender.settimeout(10)
+                if data is not None :
+                    json_data = json.dumps(data).encode('utf-8')
+                    sender.send(json_data)
+                else: 
+                    self.send_copy_db(sender,num_bytes)
+
+                if answer_requiered:
+                    try:
+                        # Esperar la llegada de un mensaje
+                        
+                        if not expected_zip_file:
+                            data = sender.recv(num_bytes)
+                            data = data.decode('utf-8')
+                            data = json.loads(data) 
+                            print(f'data recibida {data}')
+                            sender.close()
+                        else:
+                            data = self.recieve_copy_db(sender,num_bytes)
+                    except socket.timeout:
+                        # Manejar la excepción si se agotó el tiempo de espera
+                        if not expected_zip_file or not data: notify_data("Tiempo de espera agotado para recibir un mensaje","Error")
+                sender.close()
+                return data 
+
+    #region send_copy_db
+    def send_copy_db(self, conn, num_bytes=4096):
+        try:
+            file_size = os.path.getsize(f"copia{self.nodeID}.db")
+            print(f'enviando un archivo de {file_size} bytes')
+            
+            # Enviar el tamaño del archivo (usamos struct para empaquetar el número)
+            conn.sendall(struct.pack("!Q", file_size))
+
+            with open(f"copia{self.nodeID}.db", "rb") as f:
+                while True:
+                    l = f.read(num_bytes)
+                    if not l:
+                        break  # Fin del archivo
+                    conn.sendall(l)  # Envía todos los datos
+
+            print("Base de datos enviada correctamente.")
+            return True
+
+        except Exception as e:
+            print(f"Error al enviar copia.db: {e}")
+            return False
+
+    #region recieve_copy_db
+    def recieve_copy_db(self, conn, num_bytes=4096):
+        try:
+            # Recibir el tamaño del archivo
+            file_size_data = conn.recv(8)  # 8 bytes para un entero de 64 bits
+            file_size = struct.unpack("!Q", file_size_data)[0]
+            print(f'recibiendo un archivo de {file_size} bytes')
+
+            with open(f"copia{self.nodeID}.db", 'wb') as f:
+                print('escribiendo copia.db')
+                remaining_bytes = file_size
+                while remaining_bytes > 0:
+                    l = conn.recv(min(num_bytes, remaining_bytes))
+                    if not l:
+                        break  # Conexión cerrada
+                    f.write(l)
+                    remaining_bytes -= len(l)
+
+            print("Base de datos recibida correctamente.")
+            return True
+
+        except Exception as e:
+            print(f"Error al recibir copia.db: {e}")
+            return False
+
+        
     @property
     def Predecessor(self):
         return self.FT[0]
@@ -231,6 +252,7 @@ class ChordNode:
     def Serialize_Address(self):
         return { node : (address.ip,address.ports) for node,address in self.node_address.items()}
     
+    #region announce_availability
     def announce_availability(self, multicast_group= MCAST_GRP, multicast_port= MCAST_PORT):
         print("Announcing availability")
         message = f"AVAILABLE:{self.nodeID}:{self.address.ip}:{self.address.ports}"
@@ -286,6 +308,7 @@ class ChordNode:
     #region recompute_finger_table
     def recomputeFingerTable(self,write_to_new_suc = False):
         if len(self.nodeSet) > 1:
+            self.nodeSet.sort()
             self.FT[0]  = self.nodeSet[self.nodeSet.index(self.nodeID)-1] # Predecessor
             self.FT[1:] = [self.finger(i) for i in range(1,self.nBits+1)] # Sucessors
         elif len(self.nodeSet)  == 1:
@@ -299,6 +322,11 @@ class ChordNode:
             self.Sucessors[0] = self.FT[1]
             self.Sucessors[1] = self.FT[2]
             self.send_data_to_sucessors()
+
+    def printFT(self):
+        print('FingerTable:')
+        for row in self.FT:
+            print(row)
 
 
     def localSuccNode(self, key): 
@@ -381,7 +409,7 @@ class ChordNode:
                 node = msg["nodeID"]
                 notify_data(f"Receiving {action} from {node}","GetData")
                 self.index_data(msg)                  
-                send_copy_db(conn,num_bytes=5120)
+                self.send_copy_db(conn)
                 notify_data(f"Sending {response} to {node}","GetData")
                 if not get_data and len(self.nodeSet) > 2: 
                     if self.Sucessors[0] > msg["nodeID"]:
@@ -391,8 +419,8 @@ class ChordNode:
                     else:
                         self.Sucessors[1]= msg["nodeID"]
                         self.node_address[self.Sucessors[1]] = Address(msg["ip"],msg["port"])
-                elif len(self.nodeSet) > 3: 
-                    self.delete_rep_data(msg)  
+                # elif len(self.nodeSet) > 3: 
+                #     self.delete_rep_data(msg)  
 
             # if request == GET_NODES:
             #     id = msg["nodeID"]
@@ -416,13 +444,13 @@ class ChordNode:
 
     def index_data(self,msg=None):
         start_index = self.Predecessor
-        end_index =   self.nodeID
+        end_index = self.nodeID
         if msg:  
             start_index = msg["startID"] 
             end_index =   msg["endID"] 
         #print(start_index,end_index)
         condition = lambda id : self.inbetween(int(id),start_index,end_index)
-        self.db.get_filtered_db(condition,'copia.db')
+        self.db.get_filtered_db(condition,f'copia{self.nodeID}.db')
 
     def delete_rep_data(self,msg):
         start_index = msg["startID"]
@@ -435,17 +463,17 @@ class ChordNode:
         while True:          
             conn, addr = self.file_receiver.accept()
             notify_data(f"Receiving file from {addr}",'database')
-            recieve_copy_db(conn,5120)
-            self.db.replicate_db('copia.db')
+            self.recieve_copy_db(conn,8192)
+            self.db.replicate_db(f'copia{self.nodeID}.db')
             notify_data(f"Replicating data","database")
             self.db.check_db()
-            os.remove('copia.db')
+            os.remove(f'copia{self.nodeID}.db')
 
     #region get nodes
     def get_nodes(self):           
             data = {"message": GET_NODES, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID}
             leader_address = self.node_address[self.leader] 
-            data = send_request((leader_address.ip,SERVER_PORT),data=data,answer_requiered=True)
+            data = self.send_request((leader_address.ip,SERVER_PORT),data=data,answer_requiered=True)
             if data:
               if data["message"] == SET_NODES:
                 self.nodeSet = data["nodeSet"]
@@ -481,8 +509,10 @@ class ChordNode:
         while True:
             time.sleep(20)
             for i,sucessor in enumerate(self.Sucessors):
-                if sucessor is not None and sucessor != self.nodeID and sucessor != self.nodeSet[self.nodeSet.index(self.nodeID) + i + 1] :
+                if sucessor is not None and sucessor != self.nodeID and sucessor != self.nodeSet[(self.nodeSet.index(self.nodeID) + i + 1) % len(self.nodeSet)] :
                     self.recomputeFingerTable(write_to_new_suc = True)
+                    self.printFT()
+
                     
     def send_data_to_sucessors(self):
         notify_data(f"New sucessors found {self.Sucessors[0]}, {self.Sucessors[1]}","Join")
@@ -490,7 +520,7 @@ class ChordNode:
         for sucessor in self.Sucessors:
             address = (self.node_address[sucessor].ip,FILES_PORT)
             if sucessor != self.nodeID:
-                send_request(address,num_bytes=5120)
+                self.send_request(address,num_bytes=5120)
                 notify_data(f"Sending REP_DATA to {sucessor}","GetData")       
     
     #region leader_labor
@@ -556,7 +586,7 @@ class ChordNode:
             if address.ip != self.address.ip:
                 #print(f'Connecting to {address} to check if node is alive') 
                 data = {"message": CHECK_REQ, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID,"leader":self.nodeID}
-                data = send_request((address.ip, CHECK_PORT),data=data,answer_requiered=True)
+                data = self.send_request((address.ip, CHECK_PORT),data=data,answer_requiered=True)
                 if data:
                     if data["message"] == CHECK_REP:
                         current_id = data["nodeID"]
@@ -631,11 +661,11 @@ class ChordNode:
                 if not nextID == self.nodeID :
                     #notify_data(f"Connecting to {nextID}","GetData")
                     data = {"message": LOOKUP_REQ, "ip": ip , "port": port, "key": key} # send to succ
-                    send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
+                    self.send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
                     notify_data(f"Sending LOOKUP_REQ to {nextID} node ","Get_Data")
                 else:
                     data = {"message": LOOKUP_REP, "ip": self.address.ip , "port": CLIENT_PORT, "node":  nextID,"key":key}        
-                    send_request((ip,int(port)),data=data)               
+                    self.send_request((ip,int(port)),data=data)               
 
     def update_key(self,data,request,addr):
                 key = data["user_key"]
@@ -644,7 +674,7 @@ class ChordNode:
                 if not nextID == self.nodeID :
                     #data = {"message": request, "ip": ip , "port": self.address.ports[0], "user_key": key } # send to succ                    
                     notify_data(f"Sending {request}  to {nextID}: {str(self.node_address[nextID])} node ","SetData")
-                    send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
+                    self.send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
                 else :
                     self.Req_Method[request](data)
                     self.db.check_db()
@@ -653,7 +683,7 @@ class ChordNode:
                             notify_data(f"Sending {int(request)+1} to {sucessor}","SetData")
                             #data = {"message": str(int(request)+1), "ip": self.address.ip , "port": self.address.ports[0], "node":  nextID,"user_key":key}
                             data["message"] = str(int(request)+1)
-                            send_request((self.node_address[sucessor].ip,CLIENT_PORT),data=data)
+                            self.send_request((self.node_address[sucessor].ip,CLIENT_PORT),data=data)
 
 
     def get_key(self,data,request):            
@@ -662,13 +692,13 @@ class ChordNode:
                 nextID = self.localSuccNode(key)          # look up next node #-
                 if not nextID == self.nodeID :
                     #data = {"message": request, "ip": ip , "port": port, "key": key,"sender_addr":sender_addr } # send to succ 
-                    send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
+                    self.send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
                     notify_data(f"Sending {request} to {nextID} node : {str(self.node_address[nextID])} ","GetData")
                 else:
                     data = self.Req_Method[request](data)
                     #data = self.get_data(data)
                     notify_data(f"Sending  {int(request)+1} to {sender_addr}","GetData")
-                    send_request((sender_addr[0],sender_addr[1]),data=data)
+                    self.send_request((sender_addr[0],sender_addr[1]),data=data)
                     
     def set_data(self,data):
         key = data["key"]
@@ -698,8 +728,10 @@ class ChordNode:
         self.recomputeFingerTable()
 
         if len(self.nodeSet) > 3:
-            self.update_data(True)
-            self.update_data(False)
+            try:
+                self.update_data(True)
+            except :
+                print('No se pudieron obtener los datos necesarios')
             self.conn_to_suc_suc()
         elif len(self.nodeSet) > 1 :
             notify_data(f"Connecting to node {self.Sucessors[0]}","GetData")
@@ -710,18 +742,12 @@ class ChordNode:
                     "endID": self.MAXPROC,
                     "ip": self.address.ip,
                     "port": self.address.ports[1]}
-            send_request(address, data, answer_requiered=True, expected_zip_file=True)
-            self.initialize_data('copia.db')
-            notify_data(f"Data updated","database")
-            self.db.check_db()
-            os.remove('copia.db')
-            if len(self.nodeSet) == 3 :
-                address = (self.node_address[self.Sucessors[1]].ip,SERVER_PORT)
-                send_request(address, data, answer_requiered=True, expected_zip_file=True)
-                self.db.replicate_db('copia.db')
+            response = self.send_request(address, data, answer_requiered=True, expected_zip_file=True, num_bytes=5120)
+            if response:
+                self.initialize_data(f'copia{self.nodeID}.db')
                 notify_data(f"Data updated","database")
                 self.db.check_db()
-                os.remove('copia.db')
+                os.remove(f'copia{self.nodeID}.db')
         else:
             print("[+] Primer nodo del anillo.")
             self.joined = True
@@ -811,7 +837,7 @@ class ChordNode:
             possible_addresses = [address for _, address in self.node_address.items()]
         for address in possible_addresses:
             data = {"message": msg_to_send, "ip": self.address.ip , "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
-            data = send_request((address.ip, int(CHECK_PORT)),data=data,answer_requiered=True)
+            data = self.send_request((address.ip, int(CHECK_PORT)),data=data,answer_requiered=True)
             if data:
                 if data["message"] == msg_to_rcv:
                     current_id = data["nodeID"]
@@ -841,7 +867,7 @@ class ChordNode:
         else: 
             notify_data(f'Greatest node found : {current_leader}. That one is the leader',"Join")
             data = {"message": SET_LEADER, "ip": self.address.ip, "ports": self.address.ports, "nodeID": self.nodeID, "leader":self.leader,"nodeSet":self.nodeSet}
-            send_request((leader_address.ip,SERVER_PORT),data=data)
+            self.send_request((leader_address.ip,SERVER_PORT),data=data)
             discovered_nodes.sort()
             self.leader = current_leader
 
@@ -865,38 +891,40 @@ class ChordNode:
             data = {"message": REP_DATA_REQ, "ip": self.address.ip , "port": self.address.ports, "nodeID": self.nodeID}
             data["startID"] = self.Predecessor 
             data["endID"] = self.nodeID
-            successfull = send_request(address,data=data,answer_requiered=True,expected_zip_file=True,num_bytes=5120)
+            successfull = self.send_request(address,data=data,answer_requiered=True,expected_zip_file=True,num_bytes=5120)
             if successfull:
-                update_method('copia.db')
+                update_method(f'copia{self.nodeID}.db')
                 notify_data(f"Data updated","database")
                 self.db.check_db()
-                os.remove('copia.db')
+                os.remove(f'copia{self.nodeID}.db')
 
-        # Moviendo (Copiando) los datos correspondientes a mi segundo predecesor (desde mi primer sucesor)
+        # Moviendo los datos correspondientes a mi segundo predecesor (desde mi primer sucesor)
         notify_data(f"Connecting to {receiver} : node {node1}","GetData")
         address = (self.node_address[node1].ip,SERVER_PORT)
         data = {"message": request, "ip": self.address.ip , "port": self.address.ports, "nodeID": self.nodeID}
         data["startID"] = self.nodeSet[(my_index-3)%len(self.nodeSet)] 
         data["endID"] = self.nodeSet[(my_index-2)%len(self.nodeSet)] 
-        successfull = send_request(address,data=data,answer_requiered=True,expected_zip_file=True,num_bytes=5120)
+        successfull = self.send_request(address,data=data,answer_requiered=True,expected_zip_file=True,num_bytes=5120)
         if successfull:
-            self.db.replicate_db('copia.db')
+            self.db.replicate_db(f'copia{self.nodeID}.db')
             notify_data(f"Data updated","database")
             self.db.check_db()
-            os.remove('copia.db')
+            os.remove(f'copia{self.nodeID}.db')
 
-        # Moviendo (Copiando) los datos correspondientes a mi predecesor (desde mi segundo sucesor)
+        # Moviendo los datos correspondientes a mi predecesor (desde mi segundo sucesor)
         notify_data(f"Connecting to {receiver} : node {node2}","GetData")
         address = (self.node_address[node2].ip,SERVER_PORT)
         data = {"message": request, "ip": self.address.ip , "port": self.address.ports, "nodeID": self.nodeID}
         data["startID"] = self.nodeSet[(my_index-2)%len(self.nodeSet)] 
         data["endID"] = self.nodeSet[(my_index-1)%len(self.nodeSet)] 
-        successfull = send_request(address,data=data,answer_requiered=True,expected_zip_file=True,num_bytes=5120)
+        successfull = self.send_request(address,data=data,answer_requiered=True,expected_zip_file=True,num_bytes=5120)
         if successfull:
-            self.db.replicate_db('copia.db')
+            self.db.replicate_db(f'copia{self.nodeID}.db')
             notify_data(f"Data updated","database")
             self.db.check_db()
-            os.remove('copia.db')
+            os.remove(f'copia{self.nodeID}.db')
+
+        return True
 
     def conn_to_suc_suc(self):
         my_index = self.nodeSet.index(self.nodeID)
@@ -908,12 +936,12 @@ class ChordNode:
         address1 = (self.node_address[s1].ip,SERVER_PORT)
         notify_data(f"Sending DEL_REP_DATA to sucessor : node {s1}","GetData")
         data = {"message": DEL_REP_DATA, "ip": self.address.ip , "port": self.address.ports, "nodeID": self.nodeID, "startID" : p3, "endID": p2 }
-        send_request(address1,data=data)
+        self.send_request(address1,data=data)
 
         address2 = (self.node_address[s2].ip,SERVER_PORT)
         notify_data(f"Sending DEL_REP_DATA to sucessor of my sucessor : node {s2}","GetData")
         data = {"message": DEL_REP_DATA, "ip": self.address.ip , "port": self.address.ports, "nodeID": self.nodeID, "startID" : p2, "endID": p1 }
-        send_request(address2,data=data)
+        self.send_request(address2,data=data)
 
     def initialize_data(self,db_name):
         shutil.copyfile(db_name,self.db.db_name)

@@ -8,7 +8,8 @@ from services.event_service import *
 
 from sqlalchemy import Enum, create_engine
 from sqlalchemy.orm import sessionmaker
-from db.base import Base
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 
 def notify_data(data,data_type):
 	print(data_type + ": " + data)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, BigInteger
 from sqlalchemy.orm import relationship
 from db.base import Base
 
@@ -6,7 +6,7 @@ class Meeting(Base):
     __tablename__ = "meetings"
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(Integer, ForeignKey('events.id'), index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), index=True)
+    user_id = Column(BigInteger, ForeignKey('users.id'), index=True)
     state = Column(String)
     
     event = relationship("Event", back_populates="meetings")

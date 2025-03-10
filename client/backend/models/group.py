@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, Boolean, String
-from db.base import Base
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 from sqlalchemy.orm import relationship
 from .group_user_association import association_table
 

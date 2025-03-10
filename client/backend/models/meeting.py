@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from db.base import Base
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 
 class Meeting(Base):
     __tablename__ = "meetings"

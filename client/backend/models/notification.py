@@ -1,6 +1,7 @@
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import Column, Integer, String, ForeignKey, DATETIME
-from db.base import Base
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 
 class Notification(Base):
     __tablename__ = "notifications"

@@ -1,0 +1,58 @@
+# Primera etapa: Construcción del frontend (Nuxt.js)
+FROM node:20 as frontend-builder
+
+WORKDIR /app
+
+# Copiar package.json y package-lock.json
+COPY cliente/frontend/package*.json ./
+
+# Instalar dependencias del frontend
+RUN npm install
+
+# Copiar el resto del código del frontend
+COPY cliente/frontend/ .
+
+# Construir la aplicación Nuxt.js
+RUN npm run build
+
+# ------------------------
+
+# Segunda etapa: Construcción del backend (Python)
+FROM python:3.9-slim as backend-builder
+
+WORKDIR /app
+
+# Instalar dependencias del backend
+COPY cliente/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar el código del backend
+COPY cliente/backend/ .
+
+# ------------------------
+
+# Tercera etapa: Imagen final
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Copiar el backend desde la etapa backend-builder
+COPY --from=backend-builder /app /app
+
+# Copiar los archivos construidos del frontend desde la etapa frontend-builder
+COPY --from=frontend-builder /app/dist /app/frontend/dist
+
+# Instalar Nginx para servir el frontend
+RUN apt-get update && \
+    apt-get install -y nginx && \
+    rm -rf /var/lib/apt/lists/*
+
+# Configurar Nginx para servir el frontend
+COPY cliente/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Exponer puertos
+EXPOSE 3000  
+EXPOSE 5000  
+
+# Comando para iniciar ambos servicios
+CMD service nginx start && python main.py

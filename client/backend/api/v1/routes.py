@@ -2,7 +2,6 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from services.user_service import *
 from schemas.user import UserCreate, UserResponse, UserBase
 from schemas.event import EventPrivate, EventResponse, EventBase, EventCreate
@@ -13,7 +12,7 @@ from services.meeting_service import *
 from services.group_service import *
 from auth import oauth2_scheme, SECRET_KEY, ALGORITHM
 from schemas.auth import TokenData
-from ...client import Client
+from client import Client
 
 router = APIRouter()
 
