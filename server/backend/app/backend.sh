@@ -1,6 +1,6 @@
 
 ip route del default
-ip route add default via 10.0.11.254
+ip route add default via 10.0.11.253
 
 echo "Backend gateway set"
 

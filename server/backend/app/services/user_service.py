@@ -19,7 +19,9 @@ def hash_key(key: str) -> int:
     """
     sha1 = hashlib.sha1(key.encode('utf-8'))
     hash_value = int(sha1.hexdigest(), 16) 
-    return hash_value
+    string_num = str(hash_value)
+    new_string = string_num[:16]
+    return int(new_string)
 
 # Crear un nuevo usuario
 def create_user(db: Session, name: str, email: str, password: str):

@@ -10,10 +10,12 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@rollup/rollup-linux-x64-musl": "^4.36.0",
     "axios": "^1.7.8",
     "jwt-decode": "^4.0.0",
     "nuxt": "^3.0.0",
     "qs": "^6.13.1",
+    "rollup": "^4.36.0",
     "vue": "latest",
     "vue-router": "latest"
   }

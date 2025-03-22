@@ -10,6 +10,7 @@ from sqlalchemy import Enum
 from contants import *
 
 
+
 def hash_key(key: str) -> int:
     """
     Función de hash que calcula el hash SHA-1 de una cadena de caracteres y devuelve un número entero que se utiliza como la clave del nodo en la red Chord.
@@ -83,8 +84,10 @@ class State(Enum):
 class Client:
     def __init__(self):
         my_address = Address(socket.gethostbyname(socket.gethostname()), [5000])
+        print(my_address)
         self.receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.receiver.bind((my_address.ip, my_address.ports[0]))
+        self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        self.receiver.bind((HOST, my_address.ports[0]))
         self.receiver.listen()
         self.addr: Address = my_address
         self.servers = {}
@@ -103,7 +106,7 @@ class Client:
 
 
     def listen_servers(self):
-            """Escucha mensajes multicast de otros servidores."""
+            """Escucha mensajes multicast de los servidores."""
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind((MCAST_GRP, MCAST_PORT))
@@ -118,8 +121,8 @@ class Client:
                     if message.startswith("AVAILABLE"):
                         _, node_id, ip, ports = message.split(":")
                         node_id = int(node_id)
-                        self.servers[node_id] = (Address(ip, ports.split(",")),time.time())
-                        print('Servidor descubierto en direccion : %s' % self.servers[node_id][0])
+                        self.servers[node_id] = (Address(ip, [CLIENT_PORT]),time.time())
+                        #print('Servidor descubierto en direccion : %s' % self.servers[node_id][0])
                         
 
     def cleanup_servers(self):
@@ -148,7 +151,8 @@ class Client:
         
     def server_addr(self):
         if len(self.servers) > 0 :
-            return list(self.servers.values())[0][0]    # Listar el diccionario de servidores y devolver la direccion del primero
+            address = list(self.servers.values())[0][0]    # Listar el diccionario de servidores y devolver la direccion del primero
+            return (address.ip, address.ports[0])
         else:
             return False
     
@@ -185,7 +189,7 @@ class Client:
             "sender_addr": self.addr
         }
         print(f"Sending GET_PROFILE request to {str(address)}")
-        response = send_request(address, data=data)
+        response = send_request(address, data=data, answer_requiered=True)
         if response:
             return response.get('user_name'), response.get('user_email')
         return None, None
@@ -200,8 +204,8 @@ class Client:
         user_key = hash_key(user_email)
         name, email = self.get_account(user_key)
         if name:
-            return {"id": 1, "name": name, "email": email}
-        return None
+            return {"id": user_key, "name": name, "email": email}
+        return False
     
     def delete_user(self, user_id):
         request = DELETE_USER

@@ -67,9 +67,6 @@ class ChordNode:
         self.nodeID = hash_key(self.address.ip) 
         self.nodeSet.append(self.nodeID)
         self.db = DBModel(self.nodeID)
-        self.db.create_user({"user_name": 'roger',
-                             "user_email": 'fuentesroger65@gmail.com',
-                             "password":'1234'})
         self.nBits = 160
         self.Sucessors = [None,None]
         
@@ -79,8 +76,6 @@ class ChordNode:
 
         self.MAXPROC = pow(2,160)
         self.node_address = {}
-
-        #print(socket.gethostbyname(socket.gethostname()))
 
         #initializing sockets
         

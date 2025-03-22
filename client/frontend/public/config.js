@@ -1,5 +1,5 @@
-const BASE_URL_API_V1 = 'http://127.0.0.1:8000/api/v1/';
-const BASE_URL = 'http://127.0.0.1:8000/';
+const BASE_URL_API_V1 = 'http://localhost:8000/api/v1/';
+const BASE_URL = 'http://localhost:8000/';
 
 const USERS_ENDPOINT = `${BASE_URL_API_V1}users`;
 const REGISTER_ENDPOINT = `${BASE_URL}auth/register`;

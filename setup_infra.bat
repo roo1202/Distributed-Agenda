@@ -49,13 +49,13 @@ if %errorlevel% equ 0 (
     echo Container router removed.
 )
 
-docker run -d --rm --name router --cap-add NET_ADMIN -e PYTHONUNBUFFERED=1 router
+docker run -d --rm --name router --cap-add NET_ADMIN -e PYTHONUNBUFFERED=1 -v C:\Roger\feo\Distributed-Agenda\router:/root router
 echo Container router executed.
 
 docker network connect --ip 10.0.10.254 clients router
 docker network connect --ip 10.0.11.254 servers router
 
-docker run -d --rm --name mcproxy --cap-add NET_ADMIN -e PYTHONUNBUFFERED=1 router
+docker run -d --rm --name mcproxy --cap-add NET_ADMIN -e PYTHONUNBUFFERED=1 -v C:\Roger\feo\Distributed-Agenda\router:/root router
 echo Container router executed.
 
 docker network connect --ip 10.0.11.253 servers mcproxy
@@ -68,14 +68,21 @@ docker exec -d mcproxy root/route.sh
 docker run --rm -d --network servers  --name server1 --cap-add NET_ADMIN -p 65444:65433 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
 echo Server1 created.
 
+docker exec -d server1 /backend.sh
+
 docker run --rm -d --network servers  --name server2 --cap-add NET_ADMIN -p 65445:65434 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
 echo Server2 created.
 
-docker run --rm -d --network servers  --name server3 --cap-add NET_ADMIN -p 65446:65435 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
-echo Server3 created.
+@REM docker run --rm -d --network servers  --name server3 --cap-add NET_ADMIN -p 65446:65435 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+@REM echo Server3 created.
 
-docker run --rm -d --network servers  --name server4 --cap-add NET_ADMIN -p 65447:65436 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
-echo Server4 created.
+@REM docker run --rm -d --network servers  --name server4 --cap-add NET_ADMIN -p 65447:65436 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+@REM echo Server4 created.
 
-docker run --rm -d --network servers  --name server5 --cap-add NET_ADMIN -p 65448:65437 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
-echo Server5 created.
+@REM docker run --rm -d --network servers  --name server5 --cap-add NET_ADMIN -p 65448:65437 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+@REM echo Server5 created.
+
+docker run -it --rm -d --network clients  --name client1 --cap-add NET_ADMIN -p 8080:3000 -p 8000:8000 -v C:\Roger\feo\Distributed-Agenda\client\:/app client
+echo client1 created.
+
+docker exec -d client1 /client.sh

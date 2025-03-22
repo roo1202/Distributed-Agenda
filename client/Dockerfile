@@ -12,17 +12,17 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copiar requirements.txt e instalar dependencias
-COPY /client/backend/requirements.txt ./backend/
+COPY /backend/requirements.txt ./backend/
 
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # Copiar el contenido de la carpeta app/ al WORKDIR (/app)
-COPY /client/backend .
+COPY /backend .
 
 FROM node:20-alpine
 
 # Copiar solo los archivos necesarios para instalar dependencias
-COPY /client/frontend .
+COPY /frontend .
 
 # Instalar las dependencias
 #RUN npm cache clean --force && rm -rf /frontend/node_modules /frontend/package-lock.json && npm install && npm install @rollup/rollup-linux-x64-gnu --save-optional
