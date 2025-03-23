@@ -1,4 +1,5 @@
 #!/bin/sh
+sysctl -w net.ipv4.ip_forward=1
 iptables -t nat -A POSTROUTING -s 10.0.10.0/24 -o eth0 -j MASQUERADE
 iptables -t nat -A POSTROUTING -s 10.0.11.0/24 -o eth0 -j MASQUERADE
 sleep 5

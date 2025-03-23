@@ -39,6 +39,7 @@ def send_request(address,data=None,answer_requiered=False,num_bytes=1024):
                 return False
             try : 
                 sender.connect(address)
+                print('conexion establecida correctamente')
             except ConnectionRefusedError as e :
                 sender.close()
                 return None
@@ -84,7 +85,6 @@ class State(Enum):
 class Client:
     def __init__(self):
         my_address = Address(socket.gethostbyname(socket.gethostname()), [5000])
-        print(my_address)
         self.receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.receiver.bind((HOST, my_address.ports[0]))
@@ -103,6 +103,12 @@ class Client:
         self.cleanup_servers_thread = threading.Thread(target=self.cleanup_servers)
         self.cleanup_servers_thread.daemon =True
         self.cleanup_servers_thread.start()
+
+        time.sleep(5)
+
+        send_request(address=self.server_addr(), data='Hola desde el cliente')
+
+
 
 
     def listen_servers(self):
@@ -186,10 +192,10 @@ class Client:
             "port": self.addr.ports[0],
             "user_key": user_key,
             "password": password,
-            "sender_addr": self.addr
+            "sender_addr": (self.addr.ip, self.addr.ports[0])
         }
         print(f"Sending GET_PROFILE request to {str(address)}")
-        response = send_request(address, data=data, answer_requiered=True)
+        response = send_request(address=address, data=data, answer_requiered=True)
         if response:
             return response.get('user_name'), response.get('user_email')
         return None, None

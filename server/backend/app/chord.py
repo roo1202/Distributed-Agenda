@@ -90,7 +90,7 @@ class ChordNode:
         self.receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.receiver.bind((HOST, CLIENT_PORT))
-        self.receiver.listen()
+        self.receiver.listen(5)
 
         #Puerto para recibir archivos
         self.file_receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -607,8 +607,12 @@ class ChordNode:
             print("next_step")
             print(f"My address: {str(self.address)}")
             conn, addr = self.receiver.accept()
+            print(f"Conexión aceptada desde: {addr}")
             msg=conn.recv(1024)
             msg = msg.decode('utf-8')
+            if 'Hola' in msg:
+                print(msg)
+                continue
             data = json.loads(msg) 
             print(f">>>>> {data}")
 
