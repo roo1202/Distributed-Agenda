@@ -26,18 +26,21 @@ def register(user: UserCreate, request: Request):
     db_user = client.get_user_by_email(user_email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    return client.create_account(user_name=user.name, user_email=user.email, password=user.password)
+    else:
+        client.create_account(user_name=user.name, user_email=user.email, password=user.password)
+        return UserBase(email=user.email)
 
 @router.post("/token", response_model=Token)
 def login_for_access_token(request: Request , form_data: OAuth2PasswordRequestForm = Depends()):
     client:Client = request.app.state.client  
     user = client.get_user_by_email(user_email=form_data.username)
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    print(user)
+    if not user or not verify_password(form_data.password, user['hashed_password']):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
-    return {"access_token": access_token, "token_type": "bearer", "user_name": user.name}
+    access_token = create_access_token(data={"sub": user['email']}, expires_delta=access_token_expires)
+    return {"access_token": access_token, "token_type": "bearer", "user_name": user['name']}

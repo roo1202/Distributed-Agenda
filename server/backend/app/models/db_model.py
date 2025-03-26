@@ -191,11 +191,15 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_user_by_id(db, data["user_key"])
+            user = get_user_by_id(db, data["user_key"])
+            if user is not None:
+                return user
+            else:
+                return False
         finally:
             db.close()
 
-    def get_users(self):
+    def get_users(self, data):
         """
         Obtiene todos los usuarios.
         """
@@ -366,7 +370,7 @@ class DBModel:
         finally:
             db.close()
 
-    def get_groups(self):
+    def get_groups(self, data):
         """
         Obtiene todos los grupos.
         """
@@ -466,6 +470,10 @@ class DBModel:
         finally:
             db.close()
 
+    def accept_pendient_event(self, data):
+        pass
+
+    
     def update_event(self, data):
         """
         Actualiza un evento por su ID.

@@ -12,3 +12,22 @@ class User(Base):
     groups = relationship("Group", secondary=association_table, back_populates="users")
     meetings = relationship("Meeting", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
+
+
+    def __json__(self, basic=True):
+        if basic:
+            return {
+                'id': self.id,
+                "name": self.name,
+                "email": self.email,
+                "hashed_password": self.hashed_password
+            }
+        return {
+            'id': self.id,
+            "name": self.name,
+            "email": self.email,
+            "hashed_password": self.hashed_password,
+            'groups': [group.__json__() for group in self.groups] if self.groups else [],
+            'meetings': [meeting.__json__() for meeting in self.meetings] if self.meetings else [],
+            'notifications': [notification.__json__() for notification in self.notifications] if self.notifications else []
+        }

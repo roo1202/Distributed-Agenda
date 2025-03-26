@@ -13,3 +13,13 @@ class Notification(Base):
     user = relationship("User", back_populates="notifications")  
     
     __table_args__ = (UniqueConstraint('user_id', 'id'),)
+
+
+    def __json__(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'text': self.text,
+            'time': self.time.isoformat() if self.time else None,
+            #'user': self.user.__json__(basic=True) if self.user else None
+        }

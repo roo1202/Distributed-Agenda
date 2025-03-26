@@ -1,3 +1,5 @@
+// const back_port = process.env.BACK;
+// console.log(back_port)
 const BASE_URL_API_V1 = 'http://localhost:8000/api/v1/';
 const BASE_URL = 'http://localhost:8000/';
 

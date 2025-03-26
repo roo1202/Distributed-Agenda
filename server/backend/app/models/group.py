@@ -12,3 +12,11 @@ class Group(Base):
     users = relationship("User", secondary=association_table, back_populates="groups")
 
 
+    def __json__(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'hierarchy': self.hierarchy,
+            'creator': self.creator,
+            # 'users': [user.__json__(basic=True) for user in self.users] if self.users else []
+        }

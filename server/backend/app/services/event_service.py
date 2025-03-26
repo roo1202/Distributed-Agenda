@@ -25,7 +25,7 @@ def get_event_by_id(db: Session, event_id: int):
 
 # Obtener todos los eventos de un usuario
 def get_events(db: Session, user_id: int): 
-    return db.query(Event).filter(Event.user_id == user_id)
+    return db.query(Event).filter(Event.user_id == user_id).all()
 
 # Actualizar un evento por ID
 def update_event(db: Session, event_id: int, new_description: str, new_start_time: datetime, new_end_time: datetime, new_state: str, user_id: int):

@@ -18,8 +18,9 @@ def hash_key(key: str) -> int:
     """
     sha1 = hashlib.sha1(key.encode('utf-8'))
     hash_value = int(sha1.hexdigest(), 16) 
-    return hash_value
-
+    string_num = str(hash_value)
+    new_string = string_num[:16]
+    return int(new_string)
 
 class Address():
     def __init__(self,ip,ports):
@@ -90,7 +91,7 @@ class ChordNode:
         self.receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.receiver.bind((HOST, CLIENT_PORT))
-        self.receiver.listen(5)
+        self.receiver.listen()
 
         #Puerto para recibir archivos
         self.file_receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -140,34 +141,45 @@ class ChordNode:
                 try : 
                     sender.connect(address)
                 except ConnectionRefusedError as e :
+                    print("Error de conexion :", e)
                     sender.close()
                     return None
-                    #print("Error de conexion :", e)
                     
-                # establecer un tiempo de espera de 10 segundos
-                print(f'mandando mensaje a {address} con data {data}')
-                sender.settimeout(10)
                 if data is not None :
-                    json_data = json.dumps(data).encode('utf-8')
+                    print(f'mandando mensaje a {address} con data {data}')   
+                    try:
+                        data["sender_addr"] = sender.getsockname()
+                        json_data = json.dumps(data).encode('utf-8')
+                    except:
+                        data = data.__json__()
+                        json_data = json.dumps(data).encode('utf-8')
                     sender.send(json_data)
                 else: 
+                    self.index_data()
                     self.send_copy_db(sender,num_bytes)
+                    os.remove(f'copia{self.nodeID}.db')
+                    return
+
+                respuesta = None  # Variable para almacenar la respuesta
 
                 if answer_requiered:
+                    if expected_zip_file:
+                        return self.recieve_copy_db(sender, num_bytes)
+                    sender.settimeout(10)  # Establecer timeout para la recepción
                     try:
-                        # Esperar la llegada de un mensaje
-                        
-                        if not expected_zip_file:
-                            data = sender.recv(num_bytes)
-                            data = data.decode('utf-8')
-                            data = json.loads(data) 
-                            print(f'data recibida {data}')
-                            sender.close()
+                        # Recibir datos directamente del mismo socket
+                        respuesta = sender.recv(num_bytes)
+                        if respuesta:
+                            respuesta = respuesta.decode('utf-8')
+                            data = json.loads(respuesta)
                         else:
-                            data = self.recieve_copy_db(sender,num_bytes)
+                            print("El servidor cerró la conexión sin enviar respuesta.")
                     except socket.timeout:
-                        # Manejar la excepción si se agotó el tiempo de espera
-                        if not expected_zip_file or not data: notify_data("Tiempo de espera agotado para recibir un mensaje","Error")
+                        print('Tiempo de espera agotado.')
+                        if not respuesta:
+                            notify_data("Tiempo de espera agotado para recibir respuesta", "Error")
+                    except Exception as e:
+                        print("Error al recibir respuesta:", e)
                 sender.close()
                 return data 
 
@@ -175,17 +187,17 @@ class ChordNode:
     def send_copy_db(self, conn, num_bytes=4096):
         try:
             file_size = os.path.getsize(f"copia{self.nodeID}.db")
-            print(f'enviando un archivo de {file_size} bytes')
+            #print(f'enviando un archivo de {file_size} bytes')
             
             # Enviar el tamaño del archivo (usamos struct para empaquetar el número)
-            conn.sendall(struct.pack("!Q", file_size))
+            conn.send(struct.pack("!Q", file_size))
 
             with open(f"copia{self.nodeID}.db", "rb") as f:
                 while True:
                     l = f.read(num_bytes)
                     if not l:
                         break  # Fin del archivo
-                    conn.sendall(l)  # Envía todos los datos
+                    conn.send(l)  # Envía todos los datos
 
             print("Base de datos enviada correctamente.")
             return True
@@ -200,7 +212,7 @@ class ChordNode:
             # Recibir el tamaño del archivo
             file_size_data = conn.recv(8)  # 8 bytes para un entero de 64 bits
             file_size = struct.unpack("!Q", file_size_data)[0]
-            print(f'recibiendo un archivo de {file_size} bytes')
+            #print(f'recibiendo un archivo de {file_size} bytes')
 
             with open(f"copia{self.nodeID}.db", 'wb') as f:
                 print('escribiendo copia.db')
@@ -308,15 +320,19 @@ class ChordNode:
             self.FT[1:] = [self.finger(i) for i in range(1,self.nBits+1)] # Sucessors
         elif len(self.nodeSet)  == 1:
             self.FT = [self.nodeSet[0] for _ in range(1,self.nBits+1)]
-        if not self.Sucessors[0]: 
+            self.Sucessors[0] = None
+            self.Sucessors[1] = None
+            return
+        if self.Sucessors[0] is None or self.Sucessors[1] is None: 
             self.Sucessors[0] = self.FT[1] 
             if len(self.nodeSet) > 2 :
-                self.Sucessors[1] = self.FT[2]
+                self.Sucessors[1] = self.nodeSet[(self.nodeSet.index(self.nodeID)+2)%len(self.nodeSet)]
             return 
         if write_to_new_suc and len(self.nodeSet) > 2 and self.Sucessors[0] != self.nodeID and self.Sucessors[1] != self.nodeID and (self.Sucessors[0] != self.FT[1] or self.Sucessors[1] != self.FT[2]):
             self.Sucessors[0] = self.FT[1]
-            self.Sucessors[1] = self.FT[2]
+            self.Sucessors[1] = self.nodeSet[(self.nodeSet.index(self.nodeID)+2)%len(self.nodeSet)]
             self.send_data_to_sucessors()
+        print(f'Sucesores actuales {self.Sucessors[0]} y {self.Sucessors[1]}')
 
     def printFT(self):
         print('FingerTable:')
@@ -325,6 +341,7 @@ class ChordNode:
 
 
     def localSuccNode(self, key): 
+        self.recomputeFingerTable()
         if self.inbetween(key, self.FT[0]+1, self.nodeID+1): # key in (FT[0],self]
             return self.nodeID                                 # node is responsible
         elif self.inbetween(key, self.nodeID+1, self.FT[1]): # key in (self,FT[1]]
@@ -403,8 +420,9 @@ class ChordNode:
                 response =   "MOV_DATA_REP" if get_data else "REP_DATA_REP"
                 node = msg["nodeID"]
                 notify_data(f"Receiving {action} from {node}","GetData")
-                self.index_data(msg)                  
+                self.index_data(msg=msg)                  
                 self.send_copy_db(conn)
+                os.remove(f'copia{self.nodeID}.db')
                 notify_data(f"Sending {response} to {node}","GetData")
                 if not get_data and len(self.nodeSet) > 2: 
                     if self.Sucessors[0] > msg["nodeID"]:
@@ -440,10 +458,9 @@ class ChordNode:
     def index_data(self,msg=None):
         start_index = self.Predecessor
         end_index = self.nodeID
-        if msg:  
+        if msg is not None:  
             start_index = msg["startID"] 
             end_index =   msg["endID"] 
-        #print(start_index,end_index)
         condition = lambda id : self.inbetween(int(id),start_index,end_index)
         self.db.get_filtered_db(condition,f'copia{self.nodeID}.db')
 
@@ -474,7 +491,7 @@ class ChordNode:
                 self.nodeSet = data["nodeSet"]
                 notify_data(f"Upadating node set :{self.nodeSet}","GetData")
                 self.node_address = self.get_addresses(data["addresses"])
-                print(self.node_address)
+                #print(self.node_address)
                 self.recomputeFingerTable(write_to_new_suc = True)
               else:
                 msg = data["message"]
@@ -502,16 +519,14 @@ class ChordNode:
 
     def check_sucessors(self):
         while True:
-            time.sleep(20)
+            time.sleep(10)
             for i,sucessor in enumerate(self.Sucessors):
                 if sucessor is not None and sucessor != self.nodeID and sucessor != self.nodeSet[(self.nodeSet.index(self.nodeID) + i + 1) % len(self.nodeSet)] :
                     self.recomputeFingerTable(write_to_new_suc = True)
-                    self.printFT()
 
                     
     def send_data_to_sucessors(self):
         notify_data(f"New sucessors found {self.Sucessors[0]}, {self.Sucessors[1]}","Join")
-        self.index_data(False)
         for sucessor in self.Sucessors:
             address = (self.node_address[sucessor].ip,FILES_PORT)
             if sucessor != self.nodeID:
@@ -616,21 +631,31 @@ class ChordNode:
             data = json.loads(msg) 
             print(f">>>>> {data}")
 
+            self.recomputeFingerTable()
+
             #unpacking data
             request = data["message"]
            
             if request == STOP: 
                 break
             elif request in self.Req_Method.keys():
+                resp = None
                 notify_data(f"Receiving {request} from {addr}","SetData")
                 if 30 <= int(request) < 60:  
                     if int(request)%2 == 0 :
-                        self.update_key(data,request,addr)
+                        resp = self.update_key(data,request,addr)
                     else: 
                         self.Req_Method[request](data)
                         self.db.check_db()
                 if 60 <= int(request) < 80:
-                   self.get_key(data,request)
+                   resp = self.get_key(data,request)
+
+                try:
+                    json_data = json.dumps(resp).encode('utf-8')
+                except:
+                    resp = resp.__json__()
+                    json_data = json.dumps(resp).encode('utf-8')
+                conn.send(json_data)
 
             elif request == LOOKUP_REQ: 
             #   if not self.leader == self.nodeID:
@@ -639,7 +664,7 @@ class ChordNode:
 
             elif request == SET_DATA_REQ:
                p = data["port"]
-               print(self.address.ports[0])
+               #print(self.address.ports[0])
                notify_data(f"Receiving SET_DATA_REQ from {p}","GetData")                
                self.update_key(data) 
 
@@ -666,38 +691,40 @@ class ChordNode:
                     data = {"message": LOOKUP_REP, "ip": self.address.ip , "port": CLIENT_PORT, "node":  nextID,"key":key}        
                     self.send_request((ip,int(port)),data=data)               
 
+# region update_key
     def update_key(self,data,request,addr):
-                key = data["user_key"]
-                nextID = self.localSuccNode(key)          # look up next node #-
-                
-                if not nextID == self.nodeID :
-                    #data = {"message": request, "ip": ip , "port": self.address.ports[0], "user_key": key } # send to succ                    
-                    notify_data(f"Sending {request}  to {nextID}: {str(self.node_address[nextID])} node ","SetData")
-                    self.send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
-                else :
-                    self.Req_Method[request](data)
-                    self.db.check_db()
-                    for sucessor in self.Sucessors:
-                        if sucessor != self.nodeID:
-                            notify_data(f"Sending {int(request)+1} to {sucessor}","SetData")
-                            #data = {"message": str(int(request)+1), "ip": self.address.ip , "port": self.address.ports[0], "node":  nextID,"user_key":key}
-                            data["message"] = str(int(request)+1)
-                            self.send_request((self.node_address[sucessor].ip,CLIENT_PORT),data=data)
+        key = data["user_key"]
+        nextID = self.localSuccNode(key)          # look up next node #-
+        
+        if not nextID == self.nodeID :
+            #data = {"message": request, "ip": ip , "port": self.address.ports[0], "user_key": key } # send to succ                    
+            notify_data(f"Sending {request}  to {nextID}: {str(self.node_address[nextID])} node ","SetData")
+            data = self.send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data, answer_requiered=True)
+        else :
+            new_data = data
+            data = self.Req_Method[request](data)
+            self.db.check_db()
+            for sucessor in self.Sucessors:
+                if sucessor is not None and sucessor != self.nodeID :
+                    notify_data(f"Sending {int(request)+1} to {sucessor}","SetData")
+                    new_data["message"] = str(int(request)+1)
+                    self.send_request((self.node_address[sucessor].ip,CLIENT_PORT),data=new_data)
+        return data
+                    
 
-
+# region get_key
     def get_key(self,data,request):            
-                key = data["user_key"]
-                sender_addr = data["sender_addr"]
-                nextID = self.localSuccNode(key)          # look up next node #-
-                if not nextID == self.nodeID :
-                    #data = {"message": request, "ip": ip , "port": port, "key": key,"sender_addr":sender_addr } # send to succ 
-                    self.send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data)
-                    notify_data(f"Sending {request} to {nextID} node : {str(self.node_address[nextID])} ","GetData")
-                else:
-                    data = self.Req_Method[request](data)
-                    #data = self.get_data(data)
-                    notify_data(f"Sending  {int(request)+1} to {sender_addr}","GetData")
-                    self.send_request((sender_addr[0],sender_addr[1]),data=data)
+        key = data["user_key"]
+        sender_addr = data["sender_addr"]
+    
+        nextID = self.localSuccNode(key)          # look up next node #-
+        if not nextID == self.nodeID :
+            data = self.send_request((self.node_address[nextID].ip,CLIENT_PORT),data=data, answer_requiered=True)
+            notify_data(f"Sending {request} to {nextID} node : {str(self.node_address[nextID])} ","GetData")
+        else:
+            data = self.Req_Method[request](data)
+            notify_data(f"Sending  {int(request)+1} to {sender_addr}","GetData")
+        return data
                     
     def set_data(self,data):
         key = data["key"]

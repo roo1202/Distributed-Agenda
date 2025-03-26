@@ -31,3 +31,4 @@ __pycache__/
 # Database files
 *.db
 test.db
+client/backend/venv

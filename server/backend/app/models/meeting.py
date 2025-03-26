@@ -11,3 +11,14 @@ class Meeting(Base):
     
     event = relationship("Event", back_populates="meetings")
     user = relationship("User", back_populates="meetings")
+
+
+    def __json__(self):
+        return {
+            'id': self.id,
+            'event_id': self.event_id,
+            'user_id': self.user_id,
+            'state': self.state,
+            # 'event': self.event.__json__() if self.event else None,
+            # 'user': self.user.__json__(basic=True) if self.user else None
+        }
