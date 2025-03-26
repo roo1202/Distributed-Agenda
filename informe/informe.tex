@@ -1,0 +1,92 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc} % Asegúrate que tu archivo .tex está en UTF-8
+\usepackage[spanish]{babel}
+\usepackage{amsmath}
+
+\title{Informe}
+\author{
+  Roger Fuentes Rodr\'iguez \\
+  Kevin Manzano Rodr\'iguez
+}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\section{Arquitectura}
+
+\subsection{Organizaci\'on del sistema distribuido}
+Implementaremos una arquitectura de microservicios, con los principales servicios: 
+\begin{itemize}
+    \item Autenticaci\'on (gesti\'on de usuarios, autenticaci\'on e identificaci\'on)
+    \item Grupos (gesti\'on de los grupos de los usuarios, incluyendo roles y jerarquías)
+    \item Agendas (gesti\'on de eventos y reuniones)
+    \item Notificaciones (envío de notificaciones en tiempo real a los usuarios)
+    \item Base de datos distribuida (almacena la informaci\'on)
+\end{itemize}
+
+\subsection{Distribuci\'on de servicios en ambas redes Docker}
+Tendremos dos redes de Docker separadas: 
+\begin{itemize}
+    \item \textbf{Cliente (frontend)}
+    \item \textbf{Servidor (backend y base de datos)}
+\end{itemize}
+El servidor alberga los servicios anteriormente mencionados.
+
+\section{Procesos}
+
+\subsection{Tipos}
+\begin{enumerate}
+    \item Autenticaci\'on
+    \begin{enumerate}
+        \item Gesti\'on de usuarios
+        \item Autenticaci\'on y autorizaci\'on
+    \end{enumerate}
+    \item Grupos
+    \begin{enumerate}
+        \item Gesti\'on de grupos
+    \end{enumerate}
+    \item Agenda
+    \begin{enumerate}
+        \item Gesti\'on de agenda y reuniones
+    \end{enumerate}
+    \item Notificaciones
+    \begin{enumerate}
+        \item Envío de notificaciones en tiempo real
+    \end{enumerate}
+    \item Base de datos
+    \begin{enumerate}
+        \item Gesti\'on de datos
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Organizaci\'on en una instancia}
+Los procesos estar\'an en instancias separadas para cada microservicio, cada servicio tiene su propia instancia de contenedor Docker.
+
+\subsection{Tipo de patr\'on de dise\~no}
+El sistema utilizar\'a peticiones as\'incronas (\texttt{async}) para las llamadas HTTP. Para optimizar el envío de notificaciones, se emplear\'an hilos que permitan paralelizar ese proceso.
+
+\section{Comunicaci\'on}
+Tendremos comunicaci\'on cliente-servidor a trav\'es de APIs RESTful. Entre servidores utilizaremos \texttt{ZMQ} y, entre procesos, \texttt{RPC}.
+
+\section{Coordinaci\'on}
+Para la coordinaci\'on entre servidores utilizaremos \texttt{PUB-SUB} que nos brinda \texttt{ZMQ}, y para el acceso exclusivo a recursos emplearemos \texttt{locks}. Con respecto a la toma de decisiones, implementaremos un algoritmo de consenso de quórum.
+
+\section{Nombrado y localizaci\'on}
+Utilizaremos \texttt{CHORD} como se vio en clases. Tendremos un anillo de tamaño $2^m$ y asignaremos los recursos a una clave utilizando la funci\'on de \texttt{hash} \texttt{SHA-256}. Para acceder a un recurso, emplearemos las \textit{finger tables} almacenadas en los nodos.
+
+\section{Consistencia y replicaci\'on}
+Dado que utilizaremos \texttt{CHORD}, para garantizar nivel 2 de tolerancia a fallos, implementaremos replicaci\'on m\'ultiple (\(K\)-réplicas) para distribuir las copias de los datos entre varios nodos (por ejemplo, consecutivos). Usaremos consistencia eventual combinada con reparaci\'on autom\'atica de r\'eplicas.
+
+\section{Tolerancia a fallas}
+Utilizaremos mecanismos de \textit{health checks} a los nodos vecinos de manera peri\'odica para verificar si est\'an activos. En caso de que un nodo falle, se asegura que las claves asignadas a ese nodo sean rápidamente reasignadas (gracias a la replicaci\'on). Para la recuperaci\'on de datos, las réplicas almacenadas en otros nodos sincronizan su informaci\'on una vez que el nodo se recupere.
+
+\section{Seguridad}
+Durante el tránsito, utilizaremos \texttt{TLS} para cifrar la comunicaci\'on entre los nodos de \texttt{CHORD}. Los nodos deben verificar la autenticidad de otros nodos, por lo que implementaremos una autenticaci\'on basada en certificados. Para la autenticaci\'on de los usuarios, usaremos \texttt{JWT}.
+
+\end{document}
