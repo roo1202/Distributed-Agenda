@@ -101,7 +101,7 @@ class DBModel:
             print(f"Base de datos existente '{'copia' + self.db_name}' eliminada.")
         
         self.engine = create_engine(self.db_url, echo=False)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine, expire_on_commit=False)
         
         Base.metadata.create_all(bind=self.engine)
 
@@ -171,7 +171,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return create_user(db, data["user_name"], data["user_email"], data["password"])
+            return (create_user(db, data["user_name"], data["user_email"], data["password"])).__json__()
         finally:
             db.close()
                 
@@ -181,7 +181,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_user_by_email(db, data["user_email"])
+            return (get_user_by_email(db, data["user_email"])).__json__()
         finally:
             db.close()
 
@@ -193,7 +193,7 @@ class DBModel:
         try:
             user = get_user_by_id(db, data["user_key"])
             if user is not None:
-                return user
+                return user.__json__()
             else:
                 return False
         finally:
@@ -215,7 +215,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return update_user(db, data["user_key"], data["new_user_name"])
+            return (update_user(db, data["user_key"], data["new_user_name"])).__json__()
         finally:
             db.close()
 
@@ -225,7 +225,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return delete_user(db, data["user_key"])
+            return (delete_user(db, data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -235,7 +235,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return create_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"])
+            return (create_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -245,7 +245,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return create_group_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"], data["group_id"])
+            return (create_group_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"], data["group_id"])).__json__()
         finally:
             db.close()
 
@@ -255,7 +255,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return add_meetings(db, data["meetings"])
+            return (add_meetings(db, data["meetings"])).__json__()
         finally:
             db.close()
 
@@ -264,7 +264,7 @@ class DBModel:
         Obtiene una reunión por su ID.
         """
         db = self.get_session()
-        try:
+        try: # ya devuelve un diccionario
             return get_meeting_by_id(db, data["meeting_id"], data["user_key"])
         finally:
             db.close()
@@ -275,7 +275,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_meetings(db, data["user_key"])
+            return [meeting.__json__() for meeting in get_meetings(db, data["user_key"]) ] 
         finally:
             db.close()
 
@@ -285,7 +285,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return update_meeting(db, data["meeting_id"], data["new_event_id"], data["new_state"], data["user_key"])
+            return (update_meeting(db, data["meeting_id"], data["new_event_id"], data["new_state"], data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -295,7 +295,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return delete_meeting(db, data["meeting_id"], data["user_key"])
+            return (delete_meeting(db, data["meeting_id"], data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -305,7 +305,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return add_user_to_group(db, data["user_id"], data["group_id"], data.get("hierarchy_level", 0))
+            return (add_user_to_group(db, data["user_key"], data["group_id"], data.get("hierarchy", 0))).__json__()
         finally:
             db.close()
 
@@ -315,7 +315,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return remove_user_from_group(db, data["user_key"], data["group_id"])
+            return (remove_user_from_group(db, data["user_key"], data["group_id"])).__json__()
         finally:
             db.close()
 
@@ -335,7 +335,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_events_in_group(db, data["group_id"], data["user_key"])
+            return [event.__json__() for event in get_events_in_group(db, data["group_id"], data["user_key"])]
         finally:
             db.close()
 
@@ -345,7 +345,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_user_groups(db, data["user_key"])
+            return [group.__json__() for group in get_user_groups(db, data["user_key"])] 
         finally:
             db.close()
 
@@ -353,10 +353,10 @@ class DBModel:
         """
         Crea un nuevo grupo.
         """
-        groupCreate = GroupCreate(name=data['group_name'], hierarchy=data['hierarchy'], creator=data['creator'])
+        groupCreate = GroupCreate(name=data['group_name'], hierarchy=data['hierarchy'], creator=data['user_key'])
         db = self.get_session()
         try:
-            return create_group(db, groupCreate)
+            return (create_group(db, groupCreate)).__json__()
         finally:
             db.close()
 
@@ -366,7 +366,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_group_by_id(db, data["group_id"])
+            return (get_group_by_id(db, data["group_id"])).__json__()
         finally:
             db.close()
 
@@ -376,7 +376,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_groups(db)
+            return [group.__json__() for group in get_groups(db)] 
         finally:
             db.close()
 
@@ -386,7 +386,8 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return update_group(db, data["group_id"], data["group_update"])
+            groupUpdate = GroupUpdate(name= data["group_name"], hierarchy=data["group_hierarchy"])
+            return (update_group(db, data["group_id"], groupUpdate)).__json__()
         finally:
             db.close()
 
@@ -396,7 +397,17 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return delete_group(db, data["group_id"])
+            return (delete_group(db, data["user_key"], data["group_id"])).__json__()
+        finally:
+            db.close()
+
+    def delete_member_group(self, data):
+        """
+        Elimina un usuario de un grupo.
+        """
+        db = self.get_session()
+        try:
+            return (delete_user_group(db, data["user_key"], data["group_id"])).__json__()
         finally:
             db.close()
 
@@ -415,7 +426,7 @@ class DBModel:
         Obtiene el nivel de jerarquía de un usuario en un grupo.
         """
         db = self.get_session()
-        try:
+        try: # ya retorna un int
             return get_hierarchy_level(db, data["user_key"], data["group_id"])
         finally:
             db.close()
@@ -426,7 +437,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_invited_groups(db, data["user_key"])
+            return [group.__json__() for group in get_invited_groups(db, data["user_key"])]
         finally:
             db.close()
 
@@ -435,8 +446,8 @@ class DBModel:
         Modifica el nivel de jerarquía de un usuario en un grupo.
         """
         db = self.get_session()
-        try:
-            return update_hierarchy_level(db, data["user_key"], data["group_id"], data["new_hierarchy_level"])
+        try: # ya devuelve un diccionario
+            return update_hierarchy_level(db, data["user_key"], data["group_id"], data["hierarchy"])
         finally:
             db.close()
 
@@ -446,7 +457,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return create_event(db, data["description"], data["start_time"], data["end_time"], data["state"], data["user_key"])
+            return (create_event(db, data["description"], data["start_time"], data["end_time"], data["state"], data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -456,7 +467,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_event_by_id(db, data["event_id"])
+            return (get_event_by_id(db, data["event_id"])).__json__()
         finally:
             db.close()
 
@@ -466,13 +477,9 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_events(db, data["user_key"])
+            return [event.__json__() for event in get_events(db, data["user_key"])]
         finally:
             db.close()
-
-    def accept_pendient_event(self, data):
-        pass
-
     
     def update_event(self, data):
         """
@@ -480,7 +487,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return update_event(db, data["event_id"], data["new_description"], data["new_start_time"], data["new_end_time"], data["new_state"], data["user_key"])
+            return (update_event(db, data["event_id"], data["new_description"], data["new_start_time"], data["new_end_time"], data["new_state"], data["user_key"], data["visibility"])).__json__()
         finally:
             db.close()
 
@@ -490,7 +497,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return delete_event(db, data["event_id"], data["user_key"])
+            return (delete_event(db, data["event_id"], data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -500,7 +507,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return get_notifications(db, data["user_key"])
+            return [notif.__json__() for notif in get_notifications(db, data["user_key"])]
         finally:
             db.close()
 
@@ -510,6 +517,6 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return delete_notification(db, data["notification_id"], data["user_key"])
+            return (delete_notification(db, data["notification_id"], data["user_key"])).__json__()
         finally:
             db.close()

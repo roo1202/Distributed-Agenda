@@ -91,18 +91,23 @@ def get_meeting_by_id(db: Session, meeting_id: int, user_id: int):
         user = get_user_by_id(db, meeting.user_id)
         if user:
             result.append(user.email)
-            confirmed = confirmed and meeting.state == 'confirmed'
-            cancelled = cancelled or meeting.state == 'cancelled'
+            confirmed = confirmed and meeting.state == 'Confirmed'
+            cancelled = cancelled or meeting.state == 'Cancelled'
 
     state = ''
     if confirmed:
-        state = 'confirmed'
+        state = 'Confirmed'
     elif cancelled:
-        state = 'cancelled'
+        state = 'Cancelled'
     else:
-        state = 'pending'
+        state = 'Pending'
     
-    return (state, result, meeting.event_id, is_in)
+    return {"state": state,
+            "users_email": result,
+            "event_id": meeting.event_id,
+            "id": meeting_id,
+            "is_in": is_in
+            } 
 
 
 

@@ -11,6 +11,24 @@ import zipfile
 from models.db_model import DBModel, notify_data
 from contants import *
 import struct
+#import jwt
+
+# Configuración (guarda el secreto en variables de entorno)
+SECRET_KEY = "apruebame_Marti"
+
+# def generate_server_token(server_id):
+#     payload = {
+#         "server_id": server_id
+#     }
+#     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+# def validate_token(token):
+#     try:
+#         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+#         return payload["server_id"]  # Devuelve el ID del servidor si es válido
+#     except jwt.InvalidTokenError:
+#         print("Token inválido")
+#         return None
 
 def hash_key(key: str) -> int:
     """
@@ -63,14 +81,15 @@ class ChordNode:
         self.time_nodes = {}
         self.database = {}
         self.joined = False
-
+        self.possible_servers = [1137043456781138, 2049695985337446, 3880695701647923, 5666670138944937, 9149498558245917]
+        
         #Setting node ID
         self.nodeID = hash_key(self.address.ip) 
         self.nodeSet.append(self.nodeID)
         self.db = DBModel(self.nodeID)
         self.nBits = 160
         self.Sucessors = [None,None]
-        
+        #self.token = generate_server_token(self.nodeID)
        
         #Initializing Finger Table
         self.FT = [None for i in range(self.nBits+1)]
@@ -149,6 +168,7 @@ class ChordNode:
                     print(f'mandando mensaje a {address} con data {data}')   
                     try:
                         data["sender_addr"] = sender.getsockname()
+                        # data["token"] = self.token
                         json_data = json.dumps(data).encode('utf-8')
                     except:
                         data = data.__json__()
@@ -241,17 +261,32 @@ class ChordNode:
         return { CREATE_PROFILE: self.db.create_user ,REP_PROFILE: self.db.create_user , 
                 CREATE_GROUP: self.db.create_group, REP_GROUP:self.db.create_group, 
                 CREATE_EVENT: self.db.create_event, REP_EVENT: self.db.create_event, 
-                ACCEPT_EVENT: self.db.accept_pendient_event,ACCEPT_EVENT_REP:self.db.accept_pendient_event, 
+                CREATE_MEETING : self.db.create_meeting, REP_CREATE_MEETING : self.db.create_meeting, 
+                CREATE_GROUP_MEETING: self.db.create_group_meeting, REP_CREATE_GROUP_MEETING: self.db.create_group_meeting,
+                UPDATE_MEETING:self.db.update_meeting, REP_UPDATE_MEETING:self.db.update_meeting,
+                UPDATE_HIERARCHY_LEVEL: self.db.update_hierarchy_level, REP_UPDATE_HIERARCHY_LEVEL: self.db.update_hierarchy_level,
+                UPDATE_GROUP : self.db.update_group, REP_UPDATE_GROUP : self.db.update_group,
+                UPDATE_EVENT : self.db.update_event, REP_UPDATE_EVENT : self.db.update_event,
                 ADD_MEMBER_GROUP:self.db.add_user_to_group, ADD_MEMBER_GROUP_REP:self.db.add_user_to_group,
                 DELETE_EVENT: self.db.delete_event, DELETE_EVENT_REP: self.db.delete_event,
                 DELETE_NOTIFICATION:self.db.delete_notification,DELETE_NOTIFICATION_REP:self.db.delete_notification, 
+                DELETE_USER : self.db.delete_user, DELETE_USER_REP : self.db.delete_user,
+                DELETE_GROUP : self.db.delete_group, DELETE_GROUP_REP : self.db.delete_group,
+                DELETE_MEMBER_GROUP : self.db.delete_member_group, DELETE_MEMBER_GROUP_REP : self.db.delete_member_group,
+                DELETE_MEETING : self.db.delete_meeting, DELETE_MEETING_REP : self.db.delete_meeting,
                 GET_PROFILE: self.db.get_user_by_id,
                 GET_NOTIFICATIONS: self.db.get_notifications,
                 GET_EVENTS: self.db.get_events,
-                GET_HIERARCHICAL_MEMBERS: self.db.get_hierarchy_level,
+                GET_MEETING : self.db.get_meeting_by_id,
+                GET_MEETINGS : self.db.get_meetings,
+                GET_HIERARCHY_LEVEL: self.db.get_hierarchy_level,
                 GET_GROUP_TYPE:self.db.is_hierarchy_group,
-                GET_GROUPS: self.db.get_groups, 
-                GET_EVENT:self.db.get_event_by_id
+                GET_GROUP : self.db.get_group_by_id,
+                GET_GROUPS: self.db.get_user_groups, 
+                GET_EVENT:self.db.get_event_by_id,
+                GET_USERS_IN_GROUP: self.db.get_users_in_group,
+                GET_EVENTS_IN_GROUP: self.db.get_events_in_group,
+                GET_INVITED_GROUPS: self.db.get_invited_groups,
                 }
     
 
@@ -412,6 +447,10 @@ class ChordNode:
             msg = json.loads(msg) 
             
             request = msg["message"]
+
+            # if not (validate_token(msg["token"]) in self.possible_servers):
+            #     print("Conexion recibida desde servidor desconocido")
+            #     continue
     
             # I have a new predeccesor (sucessor)
             if request == MOV_DATA_REQ or request == REP_DATA_REQ:
@@ -641,18 +680,19 @@ class ChordNode:
             elif request in self.Req_Method.keys():
                 resp = None
                 notify_data(f"Receiving {request} from {addr}","SetData")
-                if 30 <= int(request) < 60:  
+                if 28 <= int(request) < 60:  
                     if int(request)%2 == 0 :
                         resp = self.update_key(data,request,addr)
                     else: 
                         self.Req_Method[request](data)
                         self.db.check_db()
-                if 60 <= int(request) < 80:
+                if 60 <= int(request) < 90:
                    resp = self.get_key(data,request)
 
                 try:
                     json_data = json.dumps(resp).encode('utf-8')
                 except:
+                    print(resp)
                     resp = resp.__json__()
                     json_data = json.dumps(resp).encode('utf-8')
                 conn.send(json_data)

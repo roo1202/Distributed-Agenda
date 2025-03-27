@@ -28,13 +28,14 @@ def get_events(db: Session, user_id: int):
     return db.query(Event).filter(Event.user_id == user_id).all()
 
 # Actualizar un evento por ID
-def update_event(db: Session, event_id: int, new_description: str, new_start_time: datetime, new_end_time: datetime, new_state: str, user_id: int):
+def update_event(db: Session, event_id: int, new_description: str, new_start_time: datetime, new_end_time: datetime, new_state: str, user_id: int, visibility:str):
     event = db.query(Event).filter(Event.id == event_id).first()
     if event and user_id == event.user_id:
         event.description = new_description
         event.start_time = new_start_time
         event.end_time = new_end_time
         event.state = new_state
+        event.visibility = visibility
         db.commit()
         db.refresh(event)
     return event

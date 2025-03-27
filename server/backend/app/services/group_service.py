@@ -1,6 +1,6 @@
 
 from fastapi import HTTPException
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import Session
 from models.group import Group
 from schemas.group import GroupCreate, GroupUpdate
@@ -43,7 +43,6 @@ def get_users_in_group(db: Session, group_id: int):
         
         if hierarchy_level and hierarchy_level[0] < 1000:
             user_emails.append(user.email)
-    
     
     return user_emails
 
@@ -107,10 +106,22 @@ def update_group(db: Session, group_id: int, group_update: GroupUpdate):
     return group
 
 # Servicio para eliminar un grupo
-def delete_group(db: Session, group_id: int):
+def delete_group(db: Session, user_id: int, group_id: int):
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if group and group.creator == user_id:
+        db.delete(group)
+        db.commit()
+    return group
+
+# Servicio para eliminar un usuario de un grupo
+def delete_user_group(db: Session, user_id: int, group_id: int):
     group = db.query(Group).filter(Group.id == group_id).first()
     if group:
-        db.delete(group)
+        stmt = delete(association_table).where(
+        (association_table.c.user_id == user_id) &
+        (association_table.c.group_id == group_id))
+    
+        db.execute(stmt)
         db.commit()
     return group
 
@@ -136,15 +147,13 @@ def get_hierarchy_level(db: Session, user_id: int, group_id: int) -> int:
     
 # Servicio para obtener los grupos a los que se me esta invitando
 def get_invited_groups(db: Session, user_id: int):
-    result = db.execute(
-        select(association_table.c.group_id)
+    groups = db.execute(
+        select(Group) 
+        .join(association_table, Group.id == association_table.c.group_id)
         .where(association_table.c.user_id == user_id)
         .where(association_table.c.hierarchy_level >= 1000)
-    ).fetchall()
-    if result:
-        return [row[0] for row in result]
-    else:
-        return []
+    ).scalars().all()
+    return groups
 
 
 # Servicio para modificar el nivel de jerarquia en un grupo
