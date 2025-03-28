@@ -356,7 +356,7 @@ class Client:
             return response
         return None
 
-    def update_meeting(self, meeting_id, new_event_id, new_state, user_id, users_email):
+    def update_meeting(self, meeting_id, new_state, user_id):
         address = self.server_addr()
         request = UPDATE_MEETING
         data = {
@@ -365,9 +365,7 @@ class Client:
             "port": self.addr.ports[0],
             "user_key": user_id,
             "meeting_id": meeting_id,
-            "new_event_id": new_event_id,
             "new_state": new_state,
-            "users_email" : users_email,
             "sender_addr": self.addr
         }
         print(f"Sending UPDATE_MEETING request to {str(address)}")
@@ -631,8 +629,15 @@ class Client:
 
     def create_event(self, user_key, event_name, date_initial, date_end, privacity=Privacity.Public, state=State.Personal):
         address = self.server_addr()
-        data = {"message": CREATE_EVENT, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": user_key, "event_name": event_name, 
-                "date_initial": date_initial , "date_end": date_end, "visibility": privacity, "state": state }
+        data = {"message": CREATE_EVENT, 
+                "ip": self.addr.ip, 
+                "port": self.addr.ports[0], 
+                "user_key": user_key, 
+                "description": event_name, 
+                "start_time": date_initial , 
+                "end_time": date_end, 
+                "visibility": privacity, 
+                "state": state }
         print(f"Sending CREATE_EVENT request to {str(address)}")
         resp = self.send_request(address,data=data)
         return resp
@@ -665,20 +670,6 @@ class Client:
         if response:
             return response 
         return None
-
-    def delete_event(self, id_event,address=None):
-        if not address: address = self.server_addr()
-        _,_,_,_,state,_,id_creator,id_group,_ = self.get_event(self.user_key,id_event,address)
-        assert (id_creator and int(id_creator) == self.user_key) or state == State.Personal
-        if id_group == None: self.delete_user_event(self.user_key,id_event,address)
-        else:
-            id_creator = int(id_creator)
-            gtype = self.get_group_type(id_creator,id_group,address)
-            if gtype == GType.Non_hierarchical: 
-                ids_user,_ = self.get_inferior_members(id_creator,id_group,str(id_creator),address)
-                members = ids_user
-            else: members = self.get_equal_members(id_creator,id_group,address)
-            for id_user in members: self.delete_user_event(int(id_user),id_event,address)
 
     def delete_user_event(self,user_key,id_event,address):
         data = {"message":DELETE_EVENT, "ip":self.addr.ip, "port":self.addr.ports[0], "user_key":user_key, "id_event":id_event  }

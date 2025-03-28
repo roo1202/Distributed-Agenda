@@ -89,6 +89,7 @@ class DBModel:
         self.db_name = f"{id}.db"
         self.db_url = f"sqlite:///{self.db_name}"
         self.classes = [User, Group, Event, Meeting, Notification]
+        self.tables = [association_table] 
 
         # Verificar si la base de datos ya existe y eliminarla
         if os.path.exists(self.db_name):
@@ -122,6 +123,7 @@ class DBModel:
     def get_filtered_db(self, condition, new_db_name):
         with self.get_session() as session:
             registers = {cls: session.query(cls).all() for cls in self.classes}
+            association_data = session.execute(association_table.select()).fetchall()
 
         engine_copia = create_engine(f"sqlite:///{new_db_name}", echo=False)
         Base.metadata.create_all(engine_copia)
@@ -132,17 +134,39 @@ class DBModel:
                 for row in registers[cls]:
                     if filter_cond(row):
                         session_copia.merge(cls(**{c.name: getattr(row, c.name) for c in cls.__table__.c}))
+
+            user_ids_in_copy = {user.id for user in session_copia.query(User).all()}
+            group_ids_in_copy = {group.id for group in session_copia.query(Group).all()}
+            for row in association_data:
+                if row.user_id in user_ids_in_copy and row.group_id in group_ids_in_copy:
+                    session_copia.execute(
+                        association_table.insert().values(
+                            user_id=row.user_id,
+                            group_id=row.group_id,
+                            hierarchy_level=row.hierarchy_level
+                        )
+                    )
             session_copia.commit()
 
     def replicate_db(self, db_name):
         engine_origen = create_engine(f"sqlite:///{db_name}", echo=False)
         with sessionmaker(bind=engine_origen)() as session_origen:
             registers = {cls: session_origen.query(cls).all() for cls in self.classes}
+            association_data = session_origen.execute(association_table.select()).fetchall()
 
         with self.get_session() as session_actual:
             for cls in self.classes:
                 for row in registers[cls]:
                     session_actual.merge(cls(**{c.name: getattr(row, c.name) for c in cls.__table__.c}))
+
+            for row in association_data:
+                session_actual.execute(
+                    association_table.insert().values(
+                        user_id=row.user_id,
+                        group_id=row.group_id,
+                        hierarchy_level=row.hierarchy_level
+                    )
+                )
             session_actual.commit()
 
     def check_db(self):
@@ -152,8 +176,24 @@ class DBModel:
                 for row in session.query(cls).all():
                     print(f"{cls.__name__}: {row.__dict__}")
 
+            notify_data("group_user_association", "GetData")
+            for row in session.execute(association_table.select()).fetchall():
+                print(f"Association: user_id={row.user_id}, group_id={row.group_id}, hierarchy_level={row.hierarchy_level}")
+
     def delete_replicated_db(self, condition):
         with self.get_session() as session:
+            association_data = session.execute(association_table.select()).fetchall()
+            user_ids_to_delete = {user.id for user in session.query(User).all() if self.filter_function(condition, User)(user)}
+            group_ids_to_delete = {group.id for group in session.query(Group).all() if self.filter_function(condition, Group)(group)}
+            
+            for row in association_data:
+                if row.user_id in user_ids_to_delete or row.group_id in group_ids_to_delete:
+                    session.execute(
+                        association_table.delete().where(
+                            (association_table.c.user_id == row.user_id) &
+                            (association_table.c.group_id == row.group_id)
+                        )
+                    )
             for cls in self.classes:
                 filter_cond = self.filter_function(condition, cls)
                 for row in session.query(cls).all():
@@ -275,7 +315,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return [meeting.__json__() for meeting in get_meetings(db, data["user_key"]) ] 
+            return get_meetings(db, data["user_key"])
         finally:
             db.close()
 
@@ -285,7 +325,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return (update_meeting(db, data["meeting_id"], data["new_event_id"], data["new_state"], data["user_key"])).__json__()
+            return (update_meeting(db, data["meeting_id"], data["new_state"], data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -457,7 +497,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return (create_event(db, data["description"], data["start_time"], data["end_time"], data["state"], data["user_key"])).__json__()
+            return (create_event(db, data["description"], data["start_time"], data["end_time"], data["state"], data["user_key"], data["visibility"])).__json__()
         finally:
             db.close()
 

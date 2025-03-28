@@ -11,24 +11,67 @@ import zipfile
 from models.db_model import DBModel, notify_data
 from contants import *
 import struct
-#import jwt
+import jwt
 
-# Configuración (guarda el secreto en variables de entorno)
-SECRET_KEY = "apruebame_Marti"
+import os
+import jwt
+from datetime import datetime, timedelta
+import uuid
 
-# def generate_server_token(server_id):
-#     payload = {
-#         "server_id": server_id
-#     }
-#     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+SECRET_KEY = os.environ.get("JWT_SECRET", "apruebame_Marti")  # Valor por defecto 
+TOKEN_EXPIRATION_MINUTES = 15  # Tiempo de vida corto para mitigar ataques
+ALLOWED_AUDIENCE = "internal_servers"  # Nombre de tu aplicación/sistema
+ISSUER_ID = "server_auth_system"  # Identificador único de tu sistema de autenticación
 
-# def validate_token(token):
-#     try:
-#         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-#         return payload["server_id"]  # Devuelve el ID del servidor si es válido
-#     except jwt.InvalidTokenError:
-#         print("Token inválido")
-#         return None
+def generate_server_token():
+    """
+    Genera un token seguro para servidores.
+    Incluye mecanismos contra replay attacks y timestamp de expiración.
+    """
+    payload = {
+        "iss": ISSUER_ID,  # Identifica quién emite el token
+        "aud": ALLOWED_AUDIENCE,  # Limita el uso del token a tu ecosistema
+        "exp": datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRATION_MINUTES),
+        "jti": str(uuid.uuid4()),  # Identificador único del token (anti-replay)
+        "role": "server",  # Autorización básica
+        "iat": datetime.utcnow(),  # Timestamp de creación
+    }
+    
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+def validate_token(token):
+    """
+    Valida un token y devuelve los datos si es válido.
+    Implementa múltiples controles de seguridad.
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=["HS256"],
+            audience=ALLOWED_AUDIENCE,  # Fuerza validación de audiencia
+            issuer=ISSUER_ID,  # Verifica el emisor esperado
+            options={
+                "require_exp": True,  # Obliga a tener expiración
+                "verify_iat": True,   # Verifica timestamp de creación
+            }
+        )
+        
+        # Verificación adicional de estructura esperada
+        if payload.get("role") != "server":
+            raise jwt.InvalidTokenError("Rol inválido")
+            
+        return True
+    
+    except jwt.ExpiredSignatureError:
+        print("Error: Token expirado")
+        return False
+    except jwt.InvalidTokenError as e:
+        print(f"Error de validación: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"Error inesperado: {str(e)}")
+        return False
 
 def hash_key(key: str) -> int:
     """
@@ -81,7 +124,6 @@ class ChordNode:
         self.time_nodes = {}
         self.database = {}
         self.joined = False
-        self.possible_servers = [1137043456781138, 2049695985337446, 3880695701647923, 5666670138944937, 9149498558245917]
         
         #Setting node ID
         self.nodeID = hash_key(self.address.ip) 
@@ -89,7 +131,6 @@ class ChordNode:
         self.db = DBModel(self.nodeID)
         self.nBits = 160
         self.Sucessors = [None,None]
-        #self.token = generate_server_token(self.nodeID)
        
         #Initializing Finger Table
         self.FT = [None for i in range(self.nBits+1)]
@@ -168,7 +209,7 @@ class ChordNode:
                     print(f'mandando mensaje a {address} con data {data}')   
                     try:
                         data["sender_addr"] = sender.getsockname()
-                        # data["token"] = self.token
+                        data["token"] = generate_server_token()
                         json_data = json.dumps(data).encode('utf-8')
                     except:
                         data = data.__json__()
@@ -448,9 +489,9 @@ class ChordNode:
             
             request = msg["message"]
 
-            # if not (validate_token(msg["token"]) in self.possible_servers):
-            #     print("Conexion recibida desde servidor desconocido")
-            #     continue
+            if not validate_token(msg["token"]):
+                print("Conexion recibida desde servidor desconocido")
+                continue
     
             # I have a new predeccesor (sucessor)
             if request == MOV_DATA_REQ or request == REP_DATA_REQ:

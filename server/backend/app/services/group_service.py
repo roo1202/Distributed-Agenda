@@ -1,6 +1,6 @@
 
 from fastapi import HTTPException
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, select, update, and_
 from sqlalchemy.orm import Session
 from models.group import Group
 from schemas.group import GroupCreate, GroupUpdate
@@ -70,9 +70,17 @@ def get_events_in_group(db: Session, group_id: int, user_id: int):
 
 # Obtener todos los grupos de un usuario
 def get_user_groups(db: Session, user_id: int):
-    user = db.query(User).filter(User.id == user_id).first()
-    if user:
-        return user.groups
+    groups = db.query(Group).join(
+        association_table,
+        and_(
+            association_table.c.group_id == Group.id,
+            association_table.c.user_id == user_id,
+            association_table.c.hierarchy_level <= 1000
+        )
+    ).all()
+    
+    if groups :
+        return groups
     return []
 
 # Servicio para crear un grupo

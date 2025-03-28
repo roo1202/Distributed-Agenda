@@ -7,6 +7,7 @@ from models.user import User
 from models.event import Event
 from services.group_service import get_hierarchy_level
 from .user_service import get_user_by_id
+from .event_service import get_event_by_id
 
 # Crear una nueva reunion
 def create_meeting(db: Session, users_email: list[str], state: str, event_id: int, user_id: int):
@@ -25,7 +26,7 @@ def create_meeting(db: Session, users_email: list[str], state: str, event_id: in
 
     new_meeting = Meeting(
                 user_id = user_id,
-                state="confirmed",
+                state="Confirmed",
                 event_id = event_id
             )
 
@@ -46,9 +47,9 @@ def create_group_meeting(db: Session, users_email: list[str], state: str, event_
         else:
             lev = get_hierarchy_level(db, user_id=user.id, group_id=group_id)
             if level > lev and lev > 0 : 
-                st = "confirmed"
+                st = "Confirmed"
             else:
-                st = "pending"
+                st = "Pending"
                 
             new_meeting = Meeting(
                 user_id = user.id,
@@ -59,7 +60,7 @@ def create_group_meeting(db: Session, users_email: list[str], state: str, event_
 
     new_meeting = Meeting(
                 user_id = user_id,
-                state="confirmed",
+                state="Confirmed",
                 event_id = event_id
             )
 
@@ -94,6 +95,8 @@ def get_meeting_by_id(db: Session, meeting_id: int, user_id: int):
             confirmed = confirmed and meeting.state == 'Confirmed'
             cancelled = cancelled or meeting.state == 'Cancelled'
 
+    event = get_event_by_id(db, meeting.event_id)
+
     state = ''
     if confirmed:
         state = 'Confirmed'
@@ -105,10 +108,12 @@ def get_meeting_by_id(db: Session, meeting_id: int, user_id: int):
     return {"state": state,
             "users_email": result,
             "event_id": meeting.event_id,
+            "event_description": event.description,
+            "start_time": event.start_time.isoformat(),
+            "end_time": event.end_time.isoformat(),
             "id": meeting_id,
             "is_in": is_in
             } 
-
 
 
 # Obtener todas las reuniones de un usuario
@@ -125,8 +130,8 @@ def get_meetings(db: Session, user_id: int):
             "event": {
                 "event_id": event.id,
                 "description": event.description,
-                "start_time": event.start_time,
-                "end_time": event.end_time,
+                "start_time": event.start_time.isoformat(),
+                "end_time": event.end_time.isoformat(),
                 "user_email" : user_email
             }
         }
@@ -136,10 +141,9 @@ def get_meetings(db: Session, user_id: int):
     
 
 # Actualizar una reunion por ID
-def update_meeting(db: Session, meeting_id: int, new_event_id: int, new_state: str, user_id : int):
+def update_meeting(db: Session, meeting_id: int, new_state: str, user_id : int):
     meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
     if meeting and meeting.user_id == user_id:
-        meeting.event_id = new_event_id
         meeting.state = new_state
         db.commit()
         db.refresh(meeting)

@@ -9,7 +9,6 @@ class Meeting(Base):
     event_id = Column(Integer, ForeignKey('events.id'), index=True)
     user_id = Column(BigInteger, ForeignKey('users.id'), index=True)
     state = Column(String)
-    users_email = Column(String)
     
     event = relationship("Event", back_populates="meetings")
     user = relationship("User", back_populates="meetings")
