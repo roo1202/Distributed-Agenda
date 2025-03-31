@@ -248,7 +248,11 @@ class Client:
     
     def get_events_of(self, user_email):
         user_key = hash_key(user_email)
-        return self.get_events(user_key)
+        events = self.get_events(user_key)
+        for event in events:
+            if event["visibility"] == "Privado":
+                event["description"] = "Evento Privado"
+        return events
     
     def delete_event(self, event_id, user_id):
         request = DELETE_EVENT
@@ -423,8 +427,8 @@ class Client:
         }
         print(f"Sending GET_HIERARCHY_LEVEL request to {str(address)}")
         response = self.send_request(address, data=data)
-        if response:
-            return response.get("hierarchy_level")
+        if response is not None:
+            return response
         return None
 
     #esto debe retornar un grupo
@@ -621,11 +625,19 @@ class Client:
             return data
         return []
 
-    def delete_notification(self, id_notification,address=None):
-        if not address: address = self.server_addr()
-        data = {"message": DELETE_NOTIFICATION, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": self.user_key, "id_notification": id_notification  }
+    def delete_notification(self, id_notification, user_id):
+        address = self.server_addr()
+        data = {
+            "message": DELETE_NOTIFICATION, 
+            "ip": self.addr.ip, 
+            "port": self.addr.ports[0], 
+            "user_key": user_id, 
+            "notification_id": id_notification  }
         print(f"Sending DELETE_NOTIFICATION request to {str(address)}")
-        self.send_request(address,data=data)
+        resp = self.send_request(address,data=data)
+        if resp:
+            return resp
+        return False
 
     def create_event(self, user_key, event_name, date_initial, date_end, privacity=Privacity.Public, state=State.Personal):
         address = self.server_addr()

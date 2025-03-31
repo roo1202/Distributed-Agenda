@@ -730,13 +730,14 @@ class ChordNode:
                 if 60 <= int(request) < 90:
                    resp = self.get_key(data,request)
 
-                try:
-                    json_data = json.dumps(resp).encode('utf-8')
-                except:
-                    print(resp)
-                    resp = resp.__json__()
-                    json_data = json.dumps(resp).encode('utf-8')
-                conn.send(json_data)
+                if resp:
+                    try:
+                        json_data = json.dumps(resp).encode('utf-8')
+                    except:
+                        print(resp)
+                        resp = resp.__json__()
+                        json_data = json.dumps(resp).encode('utf-8')
+                    conn.send(json_data)
 
             elif request == LOOKUP_REQ: 
             #   if not self.leader == self.nodeID:

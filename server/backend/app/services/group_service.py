@@ -49,7 +49,7 @@ def get_users_in_group(db: Session, group_id: int):
 # Obtener todos los eventos de un grupo por su id
 def get_events_in_group(db: Session, group_id: int, user_id: int):
     user_in_group = db.execute(
-        select([association_table.c.user_id])
+        select(association_table.c.user_id)
         .where(association_table.c.group_id == group_id)
         .where(association_table.c.user_id == user_id)
     ).fetchone()
@@ -58,8 +58,9 @@ def get_events_in_group(db: Session, group_id: int, user_id: int):
         raise HTTPException(status_code=403, detail="User does not belong to the group")
 
     users_in_group = db.execute(
-        select([association_table.c.user_id])
+        select(association_table.c.user_id)
         .where(association_table.c.group_id == group_id)
+        .where(association_table.c.hierarchy_level <= 1000)
     ).fetchall()
 
     user_ids = [user.user_id for user in users_in_group]
@@ -75,7 +76,7 @@ def get_user_groups(db: Session, user_id: int):
         and_(
             association_table.c.group_id == Group.id,
             association_table.c.user_id == user_id,
-            association_table.c.hierarchy_level <= 1000
+            association_table.c.hierarchy_level < 1000
         )
     ).all()
     
@@ -116,9 +117,12 @@ def update_group(db: Session, group_id: int, group_update: GroupUpdate):
 # Servicio para eliminar un grupo
 def delete_group(db: Session, user_id: int, group_id: int):
     group = db.query(Group).filter(Group.id == group_id).first()
-    if group and group.creator == user_id:
-        db.delete(group)
-        db.commit()
+    if group:
+        if group.creator == user_id:
+            db.delete(group)
+            db.commit()
+        else:
+            remove_user_from_group(db, user_id, group_id)
     return group
 
 # Servicio para eliminar un usuario de un grupo
@@ -143,7 +147,7 @@ def is_hierarchy_group(db: Session, group_id: int):
 # Servicio para obtener el nivel de jerarquía de un usuario en un grupo
 def get_hierarchy_level(db: Session, user_id: int, group_id: int) -> int:
     result = db.execute(
-        select([association_table.c.hierarchy_level])
+        select(association_table.c.hierarchy_level)
         .where(association_table.c.user_id == user_id)
         .where(association_table.c.group_id == group_id)
     ).fetchone()

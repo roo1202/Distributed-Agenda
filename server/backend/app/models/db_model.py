@@ -276,6 +276,8 @@ class DBModel:
         db = self.get_session()
         try:
             return (create_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"])).__json__()
+        except:
+            return
         finally:
             db.close()
 
@@ -375,7 +377,11 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return [event.__json__() for event in get_events_in_group(db, data["group_id"], data["user_key"])]
+            events = [event.__json__() for event in get_events_in_group(db, data["group_id"], data["user_key"])]
+            for event in events:
+                if event["visibility"] == "Privado":
+                    event["description"] = "Evento privado"
+            return events
         finally:
             db.close()
 
@@ -557,6 +563,6 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return (delete_notification(db, data["notification_id"], data["user_key"])).__json__()
+            return delete_notification(db, data["notification_id"], data["user_key"])
         finally:
             db.close()

@@ -2,6 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
+from schemas.notification import NotifResponse
 from services.user_service import *
 from schemas.user import UserCreate, UserResponse, UserBase
 from schemas.event import EventPrivate, EventResponse, EventBase, EventCreate
@@ -255,10 +256,16 @@ def remove_user_from_group_endpoint(user_email : str, group_id: int, request: Re
     client:Client = request.app.state.client  
     groups = [group["id"] for group in client.get_user_groups(user["id"])]
     user_to_remove = client.get_user_by_email(user_email)
-    if group_id in groups and user_to_remove is not None and int(client.get_hierarchy_level(user_to_remove["id"], group_id)) < int(client.get_hierarchy_level(user["id"], group_id)):
+    if user_to_remove is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_to_remove_h = client.get_hierarchy_level(user_to_remove["id"], group_id)
+    user_actual_h = client.get_hierarchy_level(user["id"], group_id)
+    if group_id in groups and user_to_remove is not None and user_to_remove_h is not None and user_actual_h is not None and int(user_to_remove_h) <= int(user_actual_h):
         group = client.remove_user_from_group(user_to_remove["id"], group_id)
-    if group is None or user_to_remove is None:
-        raise HTTPException(status_code=404, detail="Group or User not found")
+        if group is None:
+            raise HTTPException(status_code=404, detail="Group not found")
+    else :
+        raise HTTPException(status_code=404, detail="Your hierarchy is lower than the user hierarchy")
     return group
 
 # Obtener todos los grupos de un usuario
@@ -278,7 +285,7 @@ def get_users_in_group_endpoint(group_id: int, request: Request, user = Depends(
     return user_emails
 
 # Obtener todos los eventos de un grupo
-@router.get("/groups/{group_id}/events", response_model=List[EventPrivate])
+@router.get("/groups/{group_id}/events", response_model=List[EventBase])
 def get_events_in_group_endpoint(group_id: int, request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
     events = client.get_events_in_group(group_id, user["id"])
@@ -287,7 +294,7 @@ def get_events_in_group_endpoint(group_id: int, request: Request, user = Depends
     return events
 
 # Crear una reunion con miembros del grupo
-@router.post("/groups/{group_id}/meetings/user/", response_model=MeetingResponse)
+@router.post("/groups/{group_id}/meetings/user/", response_model=MeetingBase)
 def create_group_meeting_endpoint(group_id: int, meeting: MeetingCreate, request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
     meeting = client.create_group_meeting(users_email= meeting.users_email, state=meeting.state, event_id= meeting.event_id, user_id=user["id"], group_id=group_id)
@@ -302,3 +309,21 @@ def get_invited_groups_endpoint(request: Request, user = Depends(get_current_use
     groups = client.get_invited_groups(user["id"])
     return list(groups)
     
+
+#################### NOTIFICATIONS ###########################################
+
+# Obtener todas las notificaciones de un usuario
+@router.get("/notifications/user", response_model=List[NotifResponse])
+def get_notifications_endpoint(request: Request, user = Depends(get_current_user)):
+    client:Client = request.app.state.client  
+    notif = client.get_notifications(user["id"])
+    return list(notif)
+
+# Eliminar una notificacion por su id
+@router.delete("/notifications/{notif_id}")
+def delete_notification_endpoint(notif_id : int ,request: Request, user = Depends(get_current_user)):
+    client:Client = request.app.state.client  
+    notif = client.delete_notification(notif_id, user["id"])
+    if notif is None:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return notif
