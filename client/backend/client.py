@@ -56,7 +56,7 @@ class Client:
     def __init__(self):
         my_address = Address(socket.gethostbyname(socket.gethostname()), [5000])
         self.receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.receiver.bind((HOST, my_address.ports[0]))
         self.receiver.listen()
         self.addr: Address = my_address
@@ -194,7 +194,10 @@ class Client:
         data = {
             "message": request,
             "user_key": user_key,
-            "password": password
+            "password": password,
+            "ip": self.addr.ip,
+            "port": self.addr.ports[0],
+            "sender_addr": self.addr
         }
         print(f"Sending GET_PROFILE request to {str(address)}")
         response = self.send_request(address=address, data=data)

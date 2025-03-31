@@ -235,7 +235,7 @@ class DBModel:
             if user is not None:
                 return user.__json__()
             else:
-                return False
+                return None
         finally:
             db.close()
 

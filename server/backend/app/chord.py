@@ -170,22 +170,22 @@ class ChordNode:
         #self.register_with_multicast_router()
 
         # Iniciar los hilos para mandar y manejar heartbeats
-        # self.heartbeat_thread = threading.Thread(target=self.announce_availability)
-        # self.heartbeat_thread.daemon = True
-        # self.heartbeat_thread.start()
+        self.heartbeat_thread = threading.Thread(target=self.announce_availability)
+        self.heartbeat_thread.daemon = True
+        self.heartbeat_thread.start()
 
-        # self.heartbeat_listener = threading.Thread(target=self.listen_heartbeats)
-        # self.heartbeat_listener.daemon=True
-        # self.heartbeat_listener.start()
+        self.heartbeat_listener = threading.Thread(target=self.listen_heartbeats)
+        self.heartbeat_listener.daemon=True
+        self.heartbeat_listener.start()
         print('Escuchando servidores disponibles')
 
         time.sleep(5)
         self.join()
 
         # Hilo para limpiar nodos
-        # self.cleanup_nodes_thread = threading.Thread(target=self.cleanup_nodes)
-        # self.cleanup_nodes_thread.daemon =True
-        # self.cleanup_nodes_thread.start()
+        self.cleanup_nodes_thread = threading.Thread(target=self.cleanup_nodes)
+        self.cleanup_nodes_thread.daemon =True
+        self.cleanup_nodes_thread.start()
 
         # Hilo para el movimiento de la base de datos
         self.discover_resp_thread = threading.Thread(target=self.get_discover_request)
