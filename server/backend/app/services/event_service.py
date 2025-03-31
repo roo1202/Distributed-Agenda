@@ -6,13 +6,14 @@ from schemas.event import EventCreate
 from models.meeting import Meeting
 
 # Crear un nuevo evento
-def create_event(db: Session, description: str, start_time: datetime, end_time: datetime, state: str, user_id: int):
+def create_event(db: Session, description: str, start_time, end_time, state: str, user_id: int, visibility:str):
     new_event = Event(
         description=description,
-        start_time=start_time,
-        end_time=end_time,
+        start_time=datetime.fromisoformat(start_time),
+        end_time=datetime.fromisoformat(end_time),
         state=state,
-        user_id=user_id
+        user_id=user_id,
+        visibility=visibility
     )
     db.add(new_event)
     db.commit()
@@ -28,13 +29,14 @@ def get_events(db: Session, user_id: int):
     return db.query(Event).filter(Event.user_id == user_id).all()
 
 # Actualizar un evento por ID
-def update_event(db: Session, event_id: int, new_description: str, new_start_time: datetime, new_end_time: datetime, new_state: str, user_id: int):
+def update_event(db: Session, event_id: int, new_description: str, new_start_time, new_end_time, new_state: str, user_id: int, visibility:str):
     event = db.query(Event).filter(Event.id == event_id).first()
     if event and user_id == event.user_id:
         event.description = new_description
-        event.start_time = new_start_time
-        event.end_time = new_end_time
+        event.start_time = datetime.fromisoformat(new_start_time)
+        event.end_time = datetime.fromisoformat(new_end_time)
         event.state = new_state
+        event.visibility = visibility
         db.commit()
         db.refresh(event)
     return event

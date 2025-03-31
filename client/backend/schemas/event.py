@@ -4,13 +4,15 @@ from datetime import datetime
 class EventPrivate(BaseModel):
     start_time:datetime
     end_time:datetime
-    visibility:str
+
 
 class EventBase(EventPrivate):
     description: str
-
+    visibility : str
+    
 class EventCreate(EventBase):
     state : str
+    
 
 class EventResponse(EventCreate):
     id: int

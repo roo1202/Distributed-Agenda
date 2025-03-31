@@ -1,6 +1,6 @@
 
 from fastapi import HTTPException
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update, and_
 from sqlalchemy.orm import Session
 from models.group import Group
 from schemas.group import GroupCreate, GroupUpdate
@@ -44,13 +44,12 @@ def get_users_in_group(db: Session, group_id: int):
         if hierarchy_level and hierarchy_level[0] < 1000:
             user_emails.append(user.email)
     
-    
     return user_emails
 
 # Obtener todos los eventos de un grupo por su id
 def get_events_in_group(db: Session, group_id: int, user_id: int):
     user_in_group = db.execute(
-        select([association_table.c.user_id])
+        select(association_table.c.user_id)
         .where(association_table.c.group_id == group_id)
         .where(association_table.c.user_id == user_id)
     ).fetchone()
@@ -59,21 +58,30 @@ def get_events_in_group(db: Session, group_id: int, user_id: int):
         raise HTTPException(status_code=403, detail="User does not belong to the group")
 
     users_in_group = db.execute(
-        select([association_table.c.user_id])
+        select(association_table.c.user_id)
         .where(association_table.c.group_id == group_id)
+        .where(association_table.c.hierarchy_level < 1000 )
     ).fetchall()
 
     user_ids = [user.user_id for user in users_in_group]
 
     events = db.query(Event).filter(Event.user_id.in_(user_ids)).all()
-
+    
     return [event for event in events]
 
 # Obtener todos los grupos de un usuario
 def get_user_groups(db: Session, user_id: int):
-    user = db.query(User).filter(User.id == user_id).first()
-    if user:
-        return user.groups
+    groups = db.query(Group).join(
+        association_table,
+        and_(
+            association_table.c.group_id == Group.id,
+            association_table.c.user_id == user_id,
+            association_table.c.hierarchy_level < 1000
+        )
+    ).all()
+    
+    if groups :
+        return groups
     return []
 
 # Servicio para crear un grupo
@@ -107,10 +115,25 @@ def update_group(db: Session, group_id: int, group_update: GroupUpdate):
     return group
 
 # Servicio para eliminar un grupo
-def delete_group(db: Session, group_id: int):
+def delete_group(db: Session, user_id: int, group_id: int):
     group = db.query(Group).filter(Group.id == group_id).first()
     if group:
-        db.delete(group)
+        if group.creator == user_id:
+            db.delete(group)
+            db.commit()
+        else:
+            remove_user_from_group(db, user_id, group_id)
+    return group
+
+# Servicio para eliminar un usuario de un grupo
+def delete_user_group(db: Session, user_id: int, group_id: int):
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if group:
+        stmt = delete(association_table).where(
+        (association_table.c.user_id == user_id) &
+        (association_table.c.group_id == group_id))
+    
+        db.execute(stmt)
         db.commit()
     return group
 
@@ -124,7 +147,7 @@ def is_hierarchy_group(db: Session, group_id: int):
 # Servicio para obtener el nivel de jerarquía de un usuario en un grupo
 def get_hierarchy_level(db: Session, user_id: int, group_id: int) -> int:
     result = db.execute(
-        select([association_table.c.hierarchy_level])
+        select(association_table.c.hierarchy_level)
         .where(association_table.c.user_id == user_id)
         .where(association_table.c.group_id == group_id)
     ).fetchone()
@@ -136,15 +159,13 @@ def get_hierarchy_level(db: Session, user_id: int, group_id: int) -> int:
     
 # Servicio para obtener los grupos a los que se me esta invitando
 def get_invited_groups(db: Session, user_id: int):
-    result = db.execute(
-        select(association_table.c.group_id)
+    groups = db.execute(
+        select(Group) 
+        .join(association_table, Group.id == association_table.c.group_id)
         .where(association_table.c.user_id == user_id)
         .where(association_table.c.hierarchy_level >= 1000)
-    ).fetchall()
-    if result:
-        return [row[0] for row in result]
-    else:
-        return []
+    ).scalars().all()
+    return groups
 
 
 # Servicio para modificar el nivel de jerarquia en un grupo

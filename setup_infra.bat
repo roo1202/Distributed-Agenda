@@ -80,22 +80,32 @@ echo Server3 created.
 
 docker exec -d server3 ./backend.sh
 
-@REM docker run --rm -d --network servers  --name server4 --cap-add NET_ADMIN -p 65447:65436 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
-@REM echo Server4 created.
+docker run --rm -d --network servers  --name server4 --cap-add NET_ADMIN -p 65447:65436 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+echo Server4 created.
 
-@REM docker exec -d server4 ./backend.sh
+docker exec -d server4 ./backend.sh
 
-@REM docker run --rm -d --network servers  --name server5 --cap-add NET_ADMIN -p 65448:65437 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
-@REM echo Server5 created.
+docker run --rm -d --network servers  --name server5 --cap-add NET_ADMIN -p 65448:65437 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+echo Server5 created.
 
-@REM docker exec -d server5 ./backend.sh
+docker exec -d server5 ./backend.sh
+
+docker run --rm -d --network servers  --name server6 --cap-add NET_ADMIN -p 65449:65438 -v C:\Roger\feo\Distributed-Agenda\server\backend\app:/app chord-server
+echo Server6 created.
+
+docker exec -d server6 ./backend.sh
 
 docker run -it --rm -d --network clients  --name client1 --cap-add NET_ADMIN -p 8080:3000 -p 8000:8000 -e BACK=8000 -v C:\Roger\feo\Distributed-Agenda\client\:/app client
 echo client1 created.
 
 docker exec -d client1 ./client.sh
 
-@REM docker run -it --rm -d --network clients  --name client2 --cap-add NET_ADMIN -p 8081:3000 -p 8001:8000 -e BACK=8001 -v C:\Roger\feo\Distributed-Agenda\client\:/app client
-@REM echo client2 created.
+docker run -it --rm -d --network clients  --name client2 --cap-add NET_ADMIN -p 8081:3000 -p 8001:8000 -e BACK=8001 -v C:\Roger\feo\Distributed-Agenda\client\:/app client
+echo client2 created.
 
-@REM docker exec -d client2 ./client.sh
+docker exec -d client2 ./client.sh
+
+docker run -it --rm -d --network clients  --name client3 --cap-add NET_ADMIN -p 8082:3000 -p 8002:8000 -e BACK=8002 -v C:\Roger\feo\Distributed-Agenda\client\:/app client
+echo client3 created.
+
+docker exec -d client3 ./client.sh

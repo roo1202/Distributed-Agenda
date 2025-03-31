@@ -76,4 +76,5 @@ def delete_notification(db: Session, notification_id:int, user_id: int):
     if user and notification and notification.user_id == user_id:
         db.delete(notification)
         db.commit()
-    return notification
+        return True
+    return False
