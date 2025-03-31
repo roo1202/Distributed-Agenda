@@ -60,13 +60,13 @@ def get_events_in_group(db: Session, group_id: int, user_id: int):
     users_in_group = db.execute(
         select(association_table.c.user_id)
         .where(association_table.c.group_id == group_id)
-        .where(association_table.c.hierarchy_level <= 1000)
+        .where(association_table.c.hierarchy_level < 1000 )
     ).fetchall()
 
     user_ids = [user.user_id for user in users_in_group]
 
     events = db.query(Event).filter(Event.user_id.in_(user_ids)).all()
-
+    
     return [event for event in events]
 
 # Obtener todos los grupos de un usuario

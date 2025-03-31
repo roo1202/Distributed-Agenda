@@ -96,7 +96,6 @@ def get_meeting_by_id(db: Session, meeting_id: int, user_id: int):
             cancelled = cancelled or meeting.state == 'Cancelled'
 
     event = get_event_by_id(db, meeting.event_id)
-
     state = ''
     if confirmed:
         state = 'Confirmed'

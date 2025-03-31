@@ -8,6 +8,7 @@
             <div v-for="group in groups" :key="group.id" class="grupo-card">
                 <div class="grupo-header">
                     <h3>{{ group.name }}</h3>
+                
                     <div class="grupo-actions">
                         <button @click="toggleMembers(group.id)" class="btn">Ver integrantes</button>
                         <button @click="deleteGroup(group.id)" class="btn btn-danger">Eliminar grupo</button>
@@ -19,7 +20,7 @@
                     <ul>
                         <li v-for="member in usuarios" :key="member.id" class="member-item">
                             {{ member }}
-                            <button @click="removeUser(group.id, member.id)"
+                            <button @click="removeUser(group.id, member)"
                                 class="btn btn-sm btn-danger">Eliminar</button>
                         </li>
                     </ul>
@@ -27,12 +28,13 @@
                         <input type="text" v-model="newUserEmail" placeholder="Email del usuario" required
                             class="input" />
                         <template v-if="group.hierarchy">
-                            <input type="number" v-model="newUserHierarchy" placeholder="Heraquia del usuario" required
+                            <input type="number" v-model="newUserHierarchy" placeholder="Jerarquía del usuario" required
                                 min="0" class="input" />
                         </template>
                         <button type="submit" class="btn btn-sm">Agregar usuario</button>
                     </form>
                 </div>
+                <groupsList :group="group"></groupsList>
             </div>
         </div>
 
@@ -73,7 +75,7 @@ const name = ref('');
 const groups = ref([]);
 const activeGroup = ref(null); // Para controlar el grupo activo
 const newUserEmail = ref(''); // Para almacenar el nombre del nuevo usuario
-const newUserHierarchy = ref('');
+const newUserHierarchy = ref(0);
 const route = useRoute();
 const router = useRouter();
 const usuarios = ref([]);
@@ -100,7 +102,7 @@ const addUser = async (groupId) => {
         });
 
         newUserEmail.value = '';
-        newUserHierarchy.value = '';
+        newUserHierarchy.value = 0;
         alert('Usuario agregado con exito')
         console.log(response);
     } catch (err) {
@@ -108,13 +110,24 @@ const addUser = async (groupId) => {
     }
 };
 
-const removeUser = async (groupId, userEmail, hierarchy) => {
+const removeUser = async (groupId, userEmail) => {
     try {
-        await axios.delete(`${GROUPS}/${groupId}/user/${userEmail}/level/${hierarchy}`, {
+        await axios.delete(`${GROUPS}${groupId}/users/${userEmail}`, {
             headers: { 'Authorization': `Bearer ${token.value}` },
         });
+        try {
+            const response = await axios.get(GROUPS + 'users', {
+                headers: { 'Authorization': `Bearer ${token.value}` },
+            });
+
+            groups.value = response.data;
+
+        } catch (err) {
+            console.error(err);
+        }
+        usuarios.value = await getUsuarios(groupId);
+
         const group = groups.value.find(g => g.id === groupId);
-        group.members = group.members.filter(member => member.id !== userEmail);
     } catch (err) {
         console.error(err);
     }
@@ -148,7 +161,7 @@ const createGroup = async () => {
     try {
         const response = await axios.post(GROUPS + 'hierarchy/' + group.value.hierarchy, {
             name: group.value.name,
-            hierarchy: (group.value.name !== 0)
+            hierarchy: hasHierarchy.value
         }, {
             headers: { 'Authorization': `Bearer ${token.value}` },
         });
@@ -164,6 +177,8 @@ const quitarForm = () => {
     group.value.name = '';
     group.value.hierarchy = 0;
     hasHierarchy.value = false;
+    newUserEmail.value = '';
+    newUserHierarchy.value = 0;
 };
 
 onMounted(async () => {

@@ -16,6 +16,7 @@
                         <button class="notification-button" @click="toggleNotificationsPanel">🔔</button>
                     </div>
 
+                    <h3>Eventos</h3>
                     <div v-for="evento in enhancedEventos" :key="evento.id"
                         :class="['evento', getEventStateClass(evento.start_time, evento.end_time)]"
                         @click="toggleDetails(evento.id)">
@@ -58,6 +59,31 @@
                         </div>
 
                     </div>
+                    <h3>Meetings</h3>
+                    <div v-for="meeting in meetings" :key="meeting.id"
+                        :class="['evento', getEventStateClass(meeting.start_time, meeting.end_time)]">
+
+                        <div class="container-p">
+                            <p>Descripción: {{ meeting.event_description }}
+                            </p>
+                            <p>
+
+                                Estado: {{ meeting.state }}
+                            </p>
+                            <p>
+
+                                Inicio: {{ meeting.start_time }}
+                            </p>
+                            <p>
+
+                                Fin: {{ meeting.end_time }}
+                            </p>
+                            <p>
+                                Usuarios: {{  meeting.users_email }}
+                            </p>
+                        </div>
+                    </div>
+
                 </div>
                 <div class="create-event-container">
                     <button class="toggle-button" @click="toggleCreateEvent">+</button>
@@ -79,6 +105,14 @@
                             <div>
                                 <label for="end_time">Fin:</label>
                                 <input type="datetime-local" id="end_time" v-model="newEvent.end_time" required>
+                            </div>
+                            <div>
+                                <label for="visibilidad">Visibilidad:</label>
+                                <select id="visibilidad" v-model="newEvent.visibility" required>
+                                    <option value="" disabled selected>Seleccione una opción</option>
+                                    <option value="Público">Público</option>
+                                    <option value="Privado">Privado</option>
+                                </select>
                             </div>
                             <p v-if="dateError" class="error-message">La fecha de inicio debe ser menor o igual que la
                                 fecha
@@ -106,6 +140,14 @@
                                 <input type="datetime-local" id="edit_end_time" v-model="editEventDetails.end_time"
                                     required>
                             </div>
+                            <div>
+                                <label for="visibilidad">Visibilidad:</label>
+                                <select id="visibilidad" v-model="editEventDetails.visibility" required>
+                                    <option value="" disabled selected>Seleccione una opción</option>
+                                    <option value="Público">Público</option>
+                                    <option value="Privado">Privado</option>
+                                </select>
+                            </div>
 
                             <p v-if="dateErrorEdit" class="error-message">La fecha de inicio debe ser menor o igual que
                                 la
@@ -116,7 +158,7 @@
                 </div>
             </div>
 
-            <button class="group-button" @click="goToGroup" >
+            <button class="group-button" @click="goToGroup">
                 Mis grupos
             </button>
         </div>
@@ -128,18 +170,20 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useRouter } from '#imports';
 import axios from 'axios';
-import { EVENTS_USER, EVENTS, MEETINGS, GROUP_PAGE } from '~/public/config';
+import { EVENTS_USER, EVENTS, MEETINGS, GROUP_PAGE, MEETING } from '~/public/config';
 const userName = ref('');
 
 const route = useRoute();
 const router = useRouter();
 const token = ref('');
 const eventos = ref([]);
+const meetings = ref([]);
 const newEvent = ref({
     description: '',
     start_time: '',
     end_time: '',
-    state: 'pendiente'
+    state: 'Pending',
+    visibility: ''
 });
 const showCreateEvent = ref(false);
 const showEditEvent = ref(false);
@@ -148,12 +192,13 @@ const editEventDetails = ref({
     description: '',
     start_time: '',
     end_time: '',
-    state: 'pendiente'
+    state: 'Pending',
+    visibility: ''
 });
 
 const goToGroup = async () => {
 
-    await router.push({path: GROUP_PAGE, query: { token: token.value, name:  userName.value} })
+    await router.push({ path: GROUP_PAGE, query: { token: token.value, name: userName.value, email: route.query.email } })
 }
 
 const dateError = computed(() => {
@@ -205,7 +250,7 @@ const createEvent = async () => {
             description: '',
             start_time: '',
             end_time: '',
-            state: 'pendiente'
+            state: 'Pending'
         };
         showCreateEvent.value = false;
     } catch (err) {
@@ -307,7 +352,7 @@ const sendNotifications = async (eventId) => {
         showEmailInput.value = false;
     } catch (error) {
         console.error(error);
-        alert("Hubo un error al enviar las notificaciones. \n" + error.response.data.detail);
+        alert("Hubo un error al enviar las notificaciones. \n");
     }
 };
 
@@ -346,6 +391,7 @@ const getEventStateClass = (startTime, endTime) => {
 };
 
 const addAcceptedEvent = async (event) => {
+    return;
     eventos.value.push(event);
 
     try {
@@ -372,8 +418,33 @@ onMounted(async () => {
                 }
             });
             eventos.value = response.data.map(evento => ({ ...evento, showDetails: false }));
+            console.log(eventos.value);
         } catch (err) {
             console.log(err);
+        }
+
+        try {
+            const response = await axios.get(MEETINGS, {
+                headers: {
+                    'Authorization': `Bearer ${token.value}`
+                }
+            });
+            const idMeetings = response.data.filter(meeting => meeting.state === 'Confirmed').map(x => x.id);
+
+            const meetingInfo = [];
+            for (const id of idMeetings) {
+                const _response = await axios.get(MEETING + id, {
+                    headers: {
+                        'Authorization': `Bearer ${token.value}`
+                    }   
+                })
+                console.log(_response.data);
+                meetings.value.push(_response.data);
+            }
+            console.log('here');
+
+        } catch (err) {
+            console.error(err);
         }
     }
 });
@@ -388,11 +459,11 @@ onMounted(async () => {
     height: 95vh;
     flex-direction: column
 }
+
 .container {
     display: flex;
     flex-direction: column;
     align-items: start;
-    justify-content: space-between;
     width: 100%;
     height: 100%;
 }
@@ -430,10 +501,10 @@ onMounted(async () => {
 .create-event,
 .edit-event {
     width: 97%;
-    padding: 20px;
+    padding: 23px;
     border: 1px solid #ccc;
     border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 6px 6px rgba(0, 0, 0, 0.1);
     font-family: Arial, sans-serif;
 }
 
@@ -446,7 +517,7 @@ h2 {
 /* Estilo base para los eventos */
 .evento {
     padding: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
     border: 1px solid #ccc;
     border-radius: 4px;
     cursor: pointer;
@@ -622,7 +693,7 @@ select {
     margin-top: 5px;
 }
 
-.group-button{
+.group-button {
     width: 8%;
     height: 8%;
     background-color: #ff00008a;

@@ -91,10 +91,13 @@ def get_events_endpoint(request: Request, user = Depends(get_current_user)):
 
 # Obtener los eventos de un usuario por su email
 @router.get("/events/user/email/", response_model=List[EventBase])
-def get_events_endpoint(user_email : str, request: Request):
+def get_events_endpoint(request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
-    events = client.get_events_of(user_email)
+    events = client.get_events(user["id"])
     events_list = []
+    for event in events:
+        event["start_time"] = datetime.fromisoformat(event["start_time"])
+        event["end_time"] = datetime.fromisoformat(event["end_time"])
     events_list = list(events)
     return events_list
     

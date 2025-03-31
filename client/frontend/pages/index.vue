@@ -66,7 +66,7 @@ const handleLogin = async () => {
     }
     
     // Redirigir a la nueva página con el token como parámetro de consulta
-    await router.push({ path: HOME_PAGE, query: { token: authToken.value, name: name } });
+    await router.push({ path: HOME_PAGE, query: { token: authToken.value, name: name, email: email.value } });
   } catch (err) {
     // Manejar errores
     console.log(err)

@@ -380,7 +380,7 @@ class DBModel:
             events = [event.__json__() for event in get_events_in_group(db, data["group_id"], data["user_key"])]
             for event in events:
                 if event["visibility"] == "Privado":
-                    event["description"] = "Evento privado"
+                    event["description"] = "Evento Privado"
             return events
         finally:
             db.close()
