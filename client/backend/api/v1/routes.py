@@ -73,7 +73,7 @@ def get_user_endpoint(user_email: str, request: Request):
 @router.post("/events/user/", response_model=EventResponse)
 def create_event_endpoint(event: EventCreate, request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
-    event = client.create_event(event_name=event.description, date_initial=event.start_time, date_end=event.end_time, privacity=event.visibility , state=event.state, user_key=user["id"])
+    event = client.create_event(event_name=event.description, date_initial=event.start_time.isoformat(), date_end=event.end_time.isoformat(), privacity=event.visibility , state=event.state, user_key=user["id"])
     return event
 
 # Obtener los eventos del propio usuario
@@ -82,16 +82,19 @@ def get_events_endpoint(request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
     events = client.get_events(user["id"])
     events_list = []
-    events_list = list(EventResponse(event) for event in events)
+    events_list = list(events)
     return events_list
 
 # Obtener los eventos de un usuario por su email
 @router.get("/events/user/email/", response_model=List[EventBase])
-def get_events_endpoint(user_email : str, request: Request):
+def get_events_endpoint(request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
-    events = client.get_events_of(user_email)
+    events = client.get_events(user["id"])
     events_list = []
-    events_list = list(EventBase(event) for event in events)
+    for event in events:
+        event["start_time"] = datetime.fromisoformat(event["start_time"])
+        event["end_time"] = datetime.fromisoformat(event["end_time"])
+    events_list = list(events)
     return events_list
     
 
@@ -108,7 +111,7 @@ def delete_event_endpoint(event_id: int, request: Request, user = Depends(get_cu
 @router.put("/events/{event_id}", response_model=EventResponse)
 def update_event_endpoint(event_id:int, event: EventCreate, request: Request, user= Depends(get_current_user)):
     client:Client = request.app.state.client  
-    event = client.update_event(event_id=event_id, new_description= event.description, new_start_time=event.start_time, new_end_time = event.end_time, new_state= event.state, user_id = user["id"], visibility= event.visibility)
+    event = client.update_event(event_id=event_id, new_description= event.description, new_start_time=event.start_time.isoformat(), new_end_time = event.end_time.isoformat(), new_state= event.state, user_id = user["id"], visibility= event.visibility)
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
     return event
@@ -116,7 +119,7 @@ def update_event_endpoint(event_id:int, event: EventCreate, request: Request, us
 ################# MEETINGS #############################
 
 # Crear una reunion desde un usuario
-@router.post("/meetings/user/", response_model=MeetingResponse)
+@router.post("/meetings/user/", response_model=MeetingBase)
 def create_meeting_endpoint(meeting: MeetingCreate, request: Request, user: User = Depends(get_current_user)):
     client:Client = request.app.state.client  
     meeting = client.create_meeting(users_email= meeting.users_email, state= meeting.state, event_id= meeting.event_id, user_id=user["id"])
@@ -125,23 +128,17 @@ def create_meeting_endpoint(meeting: MeetingCreate, request: Request, user: User
     return meeting
 
 # Obtener todas las reuniones de un usuario
-@router.get("/meetings/user/", response_model=List[MeetingInfo])
+@router.get("/meetings/user/", response_model=List[MeetingResponse])
 def get_meetings_endpoint( request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
     meetings = client.get_meetings(user["id"])
-    events = [client.get_event(meeting["user_id"], meeting["event_id"]) for meeting in meetings]
     meetings_info = [{"state": meeting["state"], 
-                      "user_id": meeting["user_id"], 
-                      "id" : meeting["id"], 
-                      "users_email" : meeting["users_email"]} for meeting in meetings ]
-    
-    for meeting, i in enumerate(meetings_info):
-        meeting["event_description"] = events[i]["description"]
-        meeting["event_id"] = events[i]["id"]
-        meeting["start_time"] = events[i]["start_time"]
-        meeting["end_time"] = events[i]["end_time"]
+                      "id" : meeting["meeting_id"], 
+                      "event_description": meeting["event"]["description"],
+                      "start_time": datetime.fromisoformat(meeting["event"]["start_time"]),
+                      "end_time": datetime.fromisoformat(meeting["event"]["end_time"])} for meeting in meetings ]
 
-    return list([MeetingInfo(meeting) for meeting in meetings_info])
+    return list(meetings_info)
 
 # Obtener toda la informacion de una reunion por su id
 @router.get("/meetings/{meeting_id}", response_model=MeetingInfo)
@@ -150,6 +147,8 @@ def get_meeting_endpoint(meeting_id: int, request: Request, user = Depends(get_c
     meeting_data = client.get_meeting_by_id(meeting_id, user["id"])
     if meeting_data is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    meeting_data["start_time"] = datetime.fromisoformat(meeting_data["start_time"])
+    meeting_data["end_time"] = datetime.fromisoformat(meeting_data["end_time"])
     return meeting_data
         
 
@@ -163,10 +162,10 @@ def delete_meeting_endpoint(meeting_id: int, request: Request, user = Depends(ge
     return meeting
 
 # Actualizar una reunion
-@router.post("/meetings/{meeting_id}", response_model=MeetingResponse)
-def update_meeting_endpoint(meeting_id:int, meeting: MeetingCreate, request: Request, user = Depends(get_current_user)):
+@router.post("/meetings/{meeting_id}", response_model=MeetingBase)
+def update_meeting_endpoint(meeting_id:int, meeting: MeetingBase, request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
-    meeting = client.update_meeting(meeting_id=meeting_id, new_event_id= meeting.event_id, new_state= meeting.state, user_id=user["id"], users_email = meeting.users_email)
+    meeting = client.update_meeting(meeting_id=meeting_id, new_state= meeting.state, user_id=user["id"])
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
     return meeting
@@ -255,11 +254,19 @@ def remove_user_from_group_endpoint(user_email : str, group_id: int, request: Re
     client:Client = request.app.state.client  
     groups = [group["id"] for group in client.get_user_groups(user["id"])]
     user_to_remove = client.get_user_by_email(user_email)
-    if group_id in groups and user_to_remove is not None and int(client.get_hierarchy_level(user_to_remove["id"], group_id)) < int(client.get_hierarchy_level(user["id"], group_id)):
+    print(user_email)
+    if user_to_remove is None:
+        raise HTTPException(status_code=405, detail="User not found")
+    user_to_remove_h = client.get_hierarchy_level(user_to_remove["id"], group_id)
+    user_actual_h = client.get_hierarchy_level(user["id"], group_id)
+    print(group_id, groups, user_to_remove, user_actual_h, user_to_remove_h)
+    if group_id in groups and user_to_remove is not None and user_actual_h is not None and user_to_remove_h is not None and int(user_actual_h) >= int(user_to_remove_h):
         group = client.remove_user_from_group(user_to_remove["id"], group_id)
-    if group is None or user_to_remove is None:
-        raise HTTPException(status_code=404, detail="Group or User not found")
-    return group
+        if group is None :
+            raise HTTPException(status_code=404, detail="Group not found")
+        return group
+    else:
+        raise HTTPException(status_code=404, detail='Your hierarchy is lower than the user hierarchy')
 
 # Obtener todos los grupos de un usuario
 @router.get("/groups/users", response_model=List[GroupResponse])
@@ -278,7 +285,7 @@ def get_users_in_group_endpoint(group_id: int, request: Request, user = Depends(
     return user_emails
 
 # Obtener todos los eventos de un grupo
-@router.get("/groups/{group_id}/events", response_model=List[EventPrivate])
+@router.get("/groups/{group_id}/events", response_model=List[EventBase])
 def get_events_in_group_endpoint(group_id: int, request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
     events = client.get_events_in_group(group_id, user["id"])
@@ -287,7 +294,7 @@ def get_events_in_group_endpoint(group_id: int, request: Request, user = Depends
     return events
 
 # Crear una reunion con miembros del grupo
-@router.post("/groups/{group_id}/meetings/user/", response_model=MeetingResponse)
+@router.post("/groups/{group_id}/meetings/user/", response_model=MeetingBase)
 def create_group_meeting_endpoint(group_id: int, meeting: MeetingCreate, request: Request, user = Depends(get_current_user)):
     client:Client = request.app.state.client  
     meeting = client.create_group_meeting(users_email= meeting.users_email, state=meeting.state, event_id= meeting.event_id, user_id=user["id"], group_id=group_id)

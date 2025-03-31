@@ -236,6 +236,8 @@ class DBModel:
         db = self.get_session()
         try:
             return (create_meeting(db, data["users_email"], data["state"], data["event_id"], data["user_key"])).__json__()
+        except:
+            return 
         finally:
             db.close()
 
@@ -275,7 +277,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return [meeting.__json__() for meeting in get_meetings(db, data["user_key"]) ] 
+            return get_meetings(db, data["user_key"]) 
         finally:
             db.close()
 
@@ -285,7 +287,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return (update_meeting(db, data["meeting_id"], data["new_event_id"], data["new_state"], data["user_key"])).__json__()
+            return (update_meeting(db, data["meeting_id"],  data["new_state"], data["user_key"])).__json__()
         finally:
             db.close()
 
@@ -335,7 +337,11 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return [event.__json__() for event in get_events_in_group(db, data["group_id"], data["user_key"])]
+            events = [event.__json__() for event in get_events_in_group(db, data["group_id"], data["user_key"])]
+            for event in events:
+                if event["visibility"] == "Privado":
+                    event["description"] = "Evento Privado"
+            return events
         finally:
             db.close()
 
@@ -457,7 +463,7 @@ class DBModel:
         """
         db = self.get_session()
         try:
-            return (create_event(db, data["description"], data["start_time"], data["end_time"], data["state"], data["user_key"])).__json__()
+            return (create_event(db, data["description"], data["start_time"], data["end_time"], data["state"], data["user_key"], data['visibility'])).__json__()
         finally:
             db.close()
 

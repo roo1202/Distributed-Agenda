@@ -3,7 +3,6 @@ from datetime import datetime
 
 class MeetingBase(BaseModel):
     state : str
-    user_id: int
 
 class MeetingCreate(MeetingBase):
     users_email : list[str]
@@ -11,14 +10,13 @@ class MeetingCreate(MeetingBase):
 
 class MeetingResponse(MeetingBase):
     id: int
+    event_description: str
+    start_time: datetime
+    end_time: datetime
 
 class MeetingInfo(MeetingResponse):
     users_email : list[str]
-    event_description : str
     event_id : int
-    start_time : datetime
-    end_time : datetime
-    
 
     class Config:
         from_attributes  = True

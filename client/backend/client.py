@@ -56,7 +56,7 @@ class Client:
     def __init__(self):
         my_address = Address(socket.gethostbyname(socket.gethostname()), [5000])
         self.receiver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        self.receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.receiver.bind((HOST, my_address.ports[0]))
         self.receiver.listen()
         self.addr: Address = my_address
@@ -65,14 +65,14 @@ class Client:
         print('Iniciando cliente con address: %s' % my_address)
 
         # Hilo para conocer los servidores activos 
-        self.servers_listener = threading.Thread(target=self.listen_servers)
-        self.servers_listener.daemon=True
-        self.servers_listener.start()
+        # self.servers_listener = threading.Thread(target=self.listen_servers)
+        # self.servers_listener.daemon=True
+        # self.servers_listener.start()
 
-        # Hilo para limpiar servidores caídos
-        self.cleanup_servers_thread = threading.Thread(target=self.cleanup_servers)
-        self.cleanup_servers_thread.daemon =True
-        self.cleanup_servers_thread.start()
+        # # Hilo para limpiar servidores caídos
+        # self.cleanup_servers_thread = threading.Thread(target=self.cleanup_servers)
+        # self.cleanup_servers_thread.daemon =True
+        # self.cleanup_servers_thread.start()
 
         time.sleep(5)
 
@@ -166,11 +166,12 @@ class Client:
             return data
         
     def server_addr(self):
-        if len(self.servers) > 0 :
-            address = list(self.servers.values())[0][0]    # Listar el diccionario de servidores y devolver la direccion del primero
-            return (address.ip, address.ports[0])
-        else:
-            return False
+        # if len(self.servers) > 0 :
+        #     address = list(self.servers.values())[0][0]    # Listar el diccionario de servidores y devolver la direccion del primero
+        #     return (address.ip, address.ports[0])
+        # else:
+        #     return False
+        return ('127.0.0.1', 65434)
     
 
 ################################### USERS ##########################################
@@ -356,7 +357,7 @@ class Client:
             return response
         return None
 
-    def update_meeting(self, meeting_id, new_event_id, new_state, user_id, users_email):
+    def update_meeting(self, meeting_id, new_state, user_id):
         address = self.server_addr()
         request = UPDATE_MEETING
         data = {
@@ -365,9 +366,7 @@ class Client:
             "port": self.addr.ports[0],
             "user_key": user_id,
             "meeting_id": meeting_id,
-            "new_event_id": new_event_id,
             "new_state": new_state,
-            "users_email" : users_email,
             "sender_addr": self.addr
         }
         print(f"Sending UPDATE_MEETING request to {str(address)}")
@@ -425,8 +424,8 @@ class Client:
         }
         print(f"Sending GET_HIERARCHY_LEVEL request to {str(address)}")
         response = self.send_request(address, data=data)
-        if response:
-            return response.get("hierarchy_level")
+        if response is not None:
+            return response
         return None
 
     #esto debe retornar un grupo
@@ -631,8 +630,8 @@ class Client:
 
     def create_event(self, user_key, event_name, date_initial, date_end, privacity=Privacity.Public, state=State.Personal):
         address = self.server_addr()
-        data = {"message": CREATE_EVENT, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": user_key, "event_name": event_name, 
-                "date_initial": date_initial , "date_end": date_end, "visibility": privacity, "state": state }
+        data = {"message": CREATE_EVENT, "ip": self.addr.ip, "port": self.addr.ports[0], "user_key": user_key, "description": event_name, 
+                "start_time": date_initial , "end_time": date_end, "visibility": privacity, "state": state }
         print(f"Sending CREATE_EVENT request to {str(address)}")
         resp = self.send_request(address,data=data)
         return resp
@@ -665,20 +664,6 @@ class Client:
         if response:
             return response 
         return None
-
-    def delete_event(self, id_event,address=None):
-        if not address: address = self.server_addr()
-        _,_,_,_,state,_,id_creator,id_group,_ = self.get_event(self.user_key,id_event,address)
-        assert (id_creator and int(id_creator) == self.user_key) or state == State.Personal
-        if id_group == None: self.delete_user_event(self.user_key,id_event,address)
-        else:
-            id_creator = int(id_creator)
-            gtype = self.get_group_type(id_creator,id_group,address)
-            if gtype == GType.Non_hierarchical: 
-                ids_user,_ = self.get_inferior_members(id_creator,id_group,str(id_creator),address)
-                members = ids_user
-            else: members = self.get_equal_members(id_creator,id_group,address)
-            for id_user in members: self.delete_user_event(int(id_user),id_event,address)
 
     def delete_user_event(self,user_key,id_event,address):
         data = {"message":DELETE_EVENT, "ip":self.addr.ip, "port":self.addr.ports[0], "user_key":user_key, "id_event":id_event  }
